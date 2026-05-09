@@ -168,6 +168,7 @@ model Project {
   progress        Decimal        @default(0) @db.Decimal(5, 2)
   budget          Decimal        @db.Decimal(15, 2)
   spentAmount     Decimal        @default(0) @map("spent_amount") @db.Decimal(15, 2)
+  details         Json?          // Stores comprehensive project data (client, contractor, team, compliance, financial details)
   createdBy       String         @map("created_by")
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
@@ -996,6 +997,7 @@ model BOQLineItem {
   quantity    Decimal @db.Decimal(12, 2)
   rate        Decimal @db.Decimal(12, 2)
   notes       String?
+  details     Json?   // Stores comprehensive BOQ item data (specifications, materials, labor, equipment, costs, schedule, quality, additional)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -1079,6 +1081,7 @@ model Worker {
   status          WorkerStatus @default(ACTIVE)
   joinedDate      DateTime?    @map("joined_date") @db.Date
   leftDate        DateTime?    @map("left_date") @db.Date
+  details         Json?        // Stores comprehensive worker data (personal, address, documents, employment, health, emergency, bank details)
   createdAt       DateTime     @default(now()) @map("created_at")
   updatedAt       DateTime     @updatedAt @map("updated_at")
 
@@ -1105,6 +1108,7 @@ model Equipment {
   status              EquipmentStatus @default(AVAILABLE)
   lastMaintenanceDate DateTime?       @map("last_maintenance_date") @db.Date
   nextMaintenanceDate DateTime?       @map("next_maintenance_date") @db.Date
+  details             Json?           // Stores comprehensive equipment data (technical, purchase, operational, financial, compliance, location, maintenance)
   createdAt           DateTime        @default(now()) @map("created_at")
   updatedAt           DateTime        @updatedAt @map("updated_at")
 
@@ -1327,6 +1331,7 @@ model PurchaseOrder {
   status               PurchaseOrderStatus @default(PENDING)
   paymentTerms         String?             @map("payment_terms")
   notes                String?
+  details              Json?               // Stores comprehensive purchase order data (supplier details, delivery, quality, terms, costs)
   createdBy            String              @map("created_by")
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
@@ -1390,6 +1395,7 @@ model DailyReport {
   equipmentUsed     String?  @map("equipment_used")
   safetyIncidents   String?  @map("safety_incidents")
   visitors          String?
+  details           Json?    // Stores comprehensive daily report data (shift, site conditions, attendance, progress, materials, equipment, safety, quality, challenges, tomorrow's plan)
   submittedBy       String   @map("submitted_by")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
@@ -1458,6 +1464,7 @@ model SiteIssue {
   resolvedBy      String?          @map("resolved_by")
   resolvedAt      DateTime?        @map("resolved_at")
   resolutionNotes String?          @map("resolution_notes")
+  details         Json?            // Stores comprehensive issue data (location, impact assessment, root cause, actions, responsibility, documentation, additional)
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
 
