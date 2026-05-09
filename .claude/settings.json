@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(__NEW_LINE_ea6784be182a7b97__ echo \"Checking for duplicate or problematic files...\")",
+      "Bash(__NEW_LINE_ea6784be182a7b97__ echo \"\")",
+      "Bash(__NEW_LINE_ea6784be182a7b97__ find . -name \"*.jsx\" -o -name \"*.jsx.*\")",
+      "Bash(__NEW_LINE_522d6870e94f44ea__ echo \"\")",
+      "Bash(__NEW_LINE_522d6870e94f44ea__ echo \"Checking file sizes:\")",
+      "Bash(__NEW_LINE_522d6870e94f44ea__ ls -lh *.jsx)",
+      "Read(//e/construction-ai-platform/frontend/src/pages/**)"
+    ]
+  }
+}

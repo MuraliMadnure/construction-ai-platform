@@ -1,0 +1,1622 @@
+// Prisma Schema for Construction AI Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String    @map("password_hash")
+  firstName       String    @map("first_name")
+  lastName        String    @map("last_name")
+  phone           String?
+  avatarUrl       String?   @map("avatar_url")
+  status          UserStatus @default(ACTIVE)
+  lastLoginAt     DateTime?  @map("last_login_at")
+  emailVerifiedAt DateTime?  @map("email_verified_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  deletedAt       DateTime?  @map("deleted_at")
+
+  // Relations
+  userRoles          UserRole[]
+  projectsCreated    Project[]  @relation("ProjectCreator")
+  projectMembers     ProjectMember[]
+  taskAssignments    TaskAssignment[]
+  taskAssignedBy     TaskAssignment[] @relation("TaskAssignedBy")
+  tasksAssigned      Task[]         @relation("TaskAssignee")
+  workLogs           WorkLog[]
+  dailyReportsSubmitted DailyReport[]
+  expensesCreated    Expense[]      @relation("ExpenseCreator")
+  expensesApproved   Expense[]      @relation("ExpenseApprover")
+  purchaseOrders     PurchaseOrder[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+  refreshTokens      RefreshToken[]
+  resourceAllocations ResourceAllocation[]
+  stockMovements     StockMovement[]
+  siteIssuesReported SiteIssue[]    @relation("IssueReporter")
+  siteIssuesAssigned SiteIssue[]    @relation("IssueAssignee")
+  siteIssuesResolved SiteIssue[]    @relation("IssueResolver")
+  safetyChecklists   SafetyChecklist[]
+  fileUploads        FileUpload[]
+  tasksCreated       Task[]         @relation("TaskCreator")
+  boqCreated         BOQ[]          @relation("BOQCreator")
+  boqApproved        BOQ[]          @relation("BOQApprover")
+  purchaseRequestsRequested PurchaseRequest[] @relation("PRRequester")
+  purchaseRequestsApproved  PurchaseRequest[] @relation("PRApprover")
+
+  @@map("users")
+  @@index([email])
+  @@index([status])
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  displayName String   @map("display_name")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+  @@index([name])
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  roleId    String   @map("role_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+  @@index([userId])
+  @@index([roleId])
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  resource    String
+  action      String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+  @@index([resource])
+  @@index([name])
+}
+
+model RolePermission {
+  id           String   @id @default(uuid())
+  roleId       String   @map("role_id")
+  permissionId String   @map("permission_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// ============================================
+// PROJECT MANAGEMENT
+// ============================================
+
+model Project {
+  id              String         @id @default(uuid())
+  name            String
+  description     String?
+  projectType     String         @map("project_type")
+  location        String?
+  latitude        Decimal?       @db.Decimal(10, 8)
+  longitude       Decimal?       @db.Decimal(11, 8)
+  startDate       DateTime       @map("start_date") @db.Date
+  endDate         DateTime       @map("end_date") @db.Date
+  actualStartDate DateTime?      @map("actual_start_date") @db.Date
+  actualEndDate   DateTime?      @map("actual_end_date") @db.Date
+  status          ProjectStatus  @default(PLANNING)
+  progress        Decimal        @default(0) @db.Decimal(5, 2)
+  budget          Decimal        @db.Decimal(15, 2)
+  spentAmount     Decimal        @default(0) @map("spent_amount") @db.Decimal(15, 2)
+  createdBy       String         @map("created_by")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  deletedAt       DateTime?      @map("deleted_at")
+
+  // Relations
+  creator           User              @relation("ProjectCreator", fields: [createdBy], references: [id])
+  members           ProjectMember[]
+  phases            Phase[]
+  milestones        Milestone[]
+  tasks             Task[]
+  boqs              BOQ[]
+  budgets           Budget[]
+  expenses          Expense[]
+  dailyReports      DailyReport[]
+  siteIssues        SiteIssue[]
+  aiInsights        AIInsight[]
+  aiPredictions     AIPrediction[]
+  inventory         Inventory[]
+  stockMovements    StockMovement[]
+  purchaseRequests  PurchaseRequest[]
+  purchaseOrders    PurchaseOrder[]
+  resourceAllocations ResourceAllocation[]
+  safetyChecklists  SafetyChecklist[]
+
+  @@map("projects")
+  @@index([status])
+  @@index([createdBy])
+  @@index([deletedAt])
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+model ProjectMember {
+  id        String    @id @default(uuid())
+  projectId String    @map("project_id")
+  userId    String    @map("user_id")
+  role      String
+  joinedAt  DateTime  @default(now()) @map("joined_at")
+  leftAt    DateTime? @map("left_at")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+  @@index([projectId])
+  @@index([userId])
+  @@index([role])
+}
+
+model Milestone {
+  id          String          @id @default(uuid())
+  projectId   String          @map("project_id")
+  name        String
+  description String?
+  targetDate  DateTime        @map("target_date") @db.Date
+  actualDate  DateTime?       @map("actual_date") @db.Date
+  status      MilestoneStatus @default(PENDING)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   Task[]
+
+  @@map("milestones")
+  @@index([projectId])
+  @@index([status])
+  @@index([targetDate])
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  DELAYED
+}
+
+// ============================================
+// TASK MANAGEMENT (ENTERPRISE)
+// ============================================
+
+// Project Phases (WBS Level 1)
+model Phase {
+  id              String       @id @default(uuid())
+  projectId       String       @map("project_id")
+  name            String
+  description     String?
+  phaseOrder      Int          @map("phase_order")
+  startDate       DateTime     @map("start_date") @db.Date
+  endDate         DateTime     @map("end_date") @db.Date
+  actualStartDate DateTime?    @map("actual_start_date") @db.Date
+  actualEndDate   DateTime?    @map("actual_end_date") @db.Date
+  status          PhaseStatus  @default(PLANNING)
+  progress        Decimal      @default(0) @db.Decimal(5, 2)
+  budgetAllocated Decimal      @default(0) @map("budget_allocated") @db.Decimal(15, 2)
+  actualCost      Decimal      @default(0) @map("actual_cost") @db.Decimal(15, 2)
+  responsibleId   String?      @map("responsible_id")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  subphases       Subphase[]
+  tasks           Task[]
+
+  @@map("phases")
+  @@index([projectId])
+  @@index([status])
+  @@index([phaseOrder])
+}
+
+enum PhaseStatus {
+  PLANNING
+  READY
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+}
+
+// Subphases (WBS Level 2)
+model Subphase {
+  id              String        @id @default(uuid())
+  phaseId         String        @map("phase_id")
+  name            String
+  description     String?
+  subphaseOrder   Int           @map("subphase_order")
+  startDate       DateTime      @map("start_date") @db.Date
+  endDate         DateTime      @map("end_date") @db.Date
+  actualStartDate DateTime?     @map("actual_start_date") @db.Date
+  actualEndDate   DateTime?     @map("actual_end_date") @db.Date
+  progress        Decimal       @default(0) @db.Decimal(5, 2)
+  budgetAllocated Decimal       @default(0) @map("budget_allocated") @db.Decimal(15, 2)
+  actualCost      Decimal       @default(0) @map("actual_cost") @db.Decimal(15, 2)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  phase           Phase         @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  tasks           Task[]
+
+  @@map("subphases")
+  @@index([phaseId])
+  @@index([subphaseOrder])
+}
+
+// Tasks (WBS Level 3)
+model Task {
+  id                    String         @id @default(uuid())
+  projectId             String         @map("project_id")
+  phaseId               String?        @map("phase_id")
+  subphaseId            String?        @map("subphase_id")
+  milestoneId           String?        @map("milestone_id")
+  parentTaskId          String?        @map("parent_task_id")
+  name                  String
+  description           String?        @db.Text
+  taskType              String         @map("task_type")
+  priority              TaskPriority   @default(MEDIUM)
+  status                TaskStatus     @default(DRAFT)
+  progress              Decimal        @default(0) @db.Decimal(5, 2)
+
+  // Scheduling
+  startDate             DateTime       @map("start_date") @db.Date
+  endDate               DateTime       @map("end_date") @db.Date
+  actualStartDate       DateTime?      @map("actual_start_date") @db.Date
+  actualEndDate         DateTime?      @map("actual_end_date") @db.Date
+  duration              Int            @default(0) // in days
+  estimatedHours        Decimal?       @map("estimated_hours") @db.Decimal(8, 2)
+  actualHours           Decimal?       @map("actual_hours") @db.Decimal(8, 2)
+
+  // Budget
+  estimatedCost         Decimal        @default(0) @map("estimated_cost") @db.Decimal(15, 2)
+  approvedBudget        Decimal?       @map("approved_budget") @db.Decimal(15, 2)
+  actualCost            Decimal        @default(0) @map("actual_cost") @db.Decimal(15, 2)
+
+  // Critical Path & Risk
+  isCriticalPath        Boolean        @default(false) @map("is_critical_path")
+  riskLevel             RiskLevel      @default(LOW) @map("risk_level")
+  delayReason           String?        @map("delay_reason") @db.Text
+
+  // Assignment
+  assignedTo            String?        @map("assigned_to")
+  contractorId          String?        @map("contractor_id")
+  availableForAssignment Boolean       @default(false) @map("available_for_assignment")
+
+  // Approval
+  requiresApproval      Boolean        @default(true) @map("requires_approval")
+  approvalWorkflowId    String?        @map("approval_workflow_id")
+  approvedAt            DateTime?      @map("approved_at")
+  approvedBy            String?        @map("approved_by")
+
+  // Site & Location
+  siteId                String?        @map("site_id")
+  location              String?
+  latitude              Decimal?       @db.Decimal(10, 8)
+  longitude             Decimal?       @db.Decimal(11, 8)
+
+  // Completion
+  completionType        String?        @map("completion_type") // site_reported, verified, approved
+  verifiedBy            String?        @map("verified_by")
+  verifiedAt            DateTime?      @map("verified_at")
+
+  // Metadata
+  createdBy             String         @map("created_by")
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+  deletedAt             DateTime?      @map("deleted_at")
+
+  // Relations
+  project               Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phase                 Phase?               @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  subphase              Subphase?            @relation(fields: [subphaseId], references: [id], onDelete: SetNull)
+  milestone             Milestone?           @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  parentTask            Task?                @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  subtasks              Task[]               @relation("TaskSubtasks")
+  creator               User                 @relation("TaskCreator", fields: [createdBy], references: [id])
+  assignee              User?                @relation("TaskAssignee", fields: [assignedTo], references: [id])
+  assignments           TaskAssignment[]
+  workLogs              WorkLog[]
+  dependencies          TaskDependency[]     @relation("DependentTask")
+  dependents            TaskDependency[]     @relation("DependsOnTask")
+  siteIssues            SiteIssue[]
+  aiPredictions         AIPrediction[]
+  approvalWorkflow      TaskApprovalWorkflow? @relation(fields: [approvalWorkflowId], references: [id])
+  dailyProgressReports  DailyProgressReport[]
+  taskMaterials         TaskMaterial[]
+  taskResources         TaskResource[]
+  taskChecklists        TaskChecklist[]
+  taskComments          TaskComment[]
+  taskAttachments       TaskAttachment[]
+  taskAlerts            TaskAlert[]
+  taskCostEntries       TaskCostEntry[]
+
+  @@map("tasks")
+  @@index([projectId])
+  @@index([phaseId])
+  @@index([subphaseId])
+  @@index([milestoneId])
+  @@index([parentTaskId])
+  @@index([status])
+  @@index([priority])
+  @@index([assignedTo])
+  @@index([isCriticalPath])
+  @@index([deletedAt])
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TaskStatus {
+  DRAFT
+  PLANNED
+  PENDING_APPROVAL
+  APPROVED
+  ASSIGNED
+  READY_TO_START
+  IN_PROGRESS
+  UNDER_REVIEW
+  COMPLETED
+  VERIFIED
+  CLOSED
+  ON_HOLD
+  DELAYED
+  BLOCKED
+  REJECTED
+  CANCELLED
+  REOPENED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model TaskDependency {
+  id              String           @id @default(uuid())
+  taskId          String           @map("task_id")
+  dependsOnTaskId String           @map("depends_on_task_id")
+  dependencyType  DependencyType   @default(FINISH_TO_START) @map("dependency_type")
+  lagDays         Int              @default(0) @map("lag_days")
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  task          Task @relation("DependentTask", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOnTask Task @relation("DependsOnTask", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+  @@map("task_dependencies")
+  @@index([taskId])
+  @@index([dependsOnTaskId])
+}
+
+enum DependencyType {
+  FINISH_TO_START
+  START_TO_START
+  FINISH_TO_FINISH
+  START_TO_FINISH
+}
+
+model TaskAssignment {
+  id                  String            @id @default(uuid())
+  taskId              String            @map("task_id")
+  userId              String            @map("user_id")
+  assignedBy          String            @map("assigned_by")
+  assignedAt          DateTime          @default(now()) @map("assigned_at")
+  assignmentType      AssignmentType    @default(DIRECT) @map("assignment_type")
+  allocationPercent   Int               @default(100) @map("allocation_percent")
+  instructions        String?           @db.Text
+  acceptanceRequired  Boolean           @default(false) @map("acceptance_required")
+  acceptanceStatus    AcceptanceStatus  @default(PENDING) @map("acceptance_status")
+  acceptedAt          DateTime?         @map("accepted_at")
+  acceptanceComments  String?           @map("acceptance_comments") @db.Text
+  declineReason       String?           @map("decline_reason") @db.Text
+  canDelegate         Boolean           @default(false) @map("can_delegate")
+  status              String            @default("active")
+
+  // Relations
+  task                Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedByUser      User              @relation("TaskAssignedBy", fields: [assignedBy], references: [id])
+
+  @@unique([taskId, userId])
+  @@map("task_assignments")
+  @@index([taskId])
+  @@index([userId])
+  @@index([acceptanceStatus])
+}
+
+enum AssignmentType {
+  DIRECT
+  TEAM
+  CONTRACTOR
+}
+
+enum AcceptanceStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+model WorkLog {
+  id          String   @id @default(uuid())
+  taskId      String   @map("task_id")
+  userId      String   @map("user_id")
+  date        DateTime @db.Date
+  hoursWorked Decimal  @map("hours_worked") @db.Decimal(5, 2)
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("work_logs")
+  @@index([taskId])
+  @@index([userId])
+  @@index([date])
+}
+
+// ============================================
+// TASK APPROVAL WORKFLOW
+// ============================================
+
+model TaskApprovalWorkflow {
+  id              String                @id @default(uuid())
+  workflowType    String                @map("workflow_type")
+  currentSequence Int                   @default(1) @map("current_sequence")
+  overallStatus   ApprovalStatus        @default(PENDING) @map("overall_status")
+  initiatedBy     String                @map("initiated_by")
+  initiatedAt     DateTime              @default(now()) @map("initiated_at")
+  approvedAt      DateTime?             @map("approved_at")
+  rejectedAt      DateTime?             @map("rejected_at")
+  rejectionReason String?               @map("rejection_reason") @db.Text
+  slaHours        Int                   @default(48) @map("sla_hours")
+  escalationEnabled Boolean             @default(true) @map("escalation_enabled")
+
+  // Relations
+  tasks           Task[]
+  approvalSteps   TaskApprovalStep[]
+
+  @@map("task_approval_workflows")
+  @@index([overallStatus])
+  @@index([initiatedAt])
+}
+
+model TaskApprovalStep {
+  id                String               @id @default(uuid())
+  workflowId        String               @map("workflow_id")
+  sequence          Int
+  role              String
+  approverId        String               @map("approver_id")
+  approverName      String               @map("approver_name")
+  approvalType      String               @map("approval_type")
+  status            ApprovalStatus       @default(PENDING)
+  required          Boolean              @default(true)
+  canOverride       Boolean              @default(false) @map("can_override")
+  submittedAt       DateTime?            @map("submitted_at")
+  approvedAt        DateTime?            @map("approved_at")
+  comments          String?              @db.Text
+  attachments       Json?
+  conditions        Json?
+  reminderSent      Boolean              @default(false) @map("reminder_sent")
+  escalated         Boolean              @default(false)
+  escalatedTo       String?              @map("escalated_to")
+  escalatedAt       DateTime?            @map("escalated_at")
+
+  // Relations
+  workflow          TaskApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@map("task_approval_steps")
+  @@index([workflowId])
+  @@index([approverId])
+  @@index([status])
+  @@index([sequence])
+}
+
+enum ApprovalStatus {
+  PENDING
+  IN_PROGRESS
+  APPROVED
+  REJECTED
+  CONDITIONAL_APPROVAL
+  REVISION_REQUIRED
+}
+
+// ============================================
+// DAILY PROGRESS REPORTS (ENHANCED)
+// ============================================
+
+model DailyProgressReport {
+  id                  String    @id @default(uuid())
+  taskId              String    @map("task_id")
+  projectId           String    @map("project_id")
+  siteId              String?   @map("site_id")
+  reportDate          DateTime  @map("report_date") @db.Date
+
+  // Time Tracking
+  workStartTime       DateTime? @map("work_start_time") @db.Time
+  workEndTime         DateTime? @map("work_end_time") @db.Time
+  totalHours          Decimal?  @map("total_hours") @db.Decimal(5, 2)
+  breakTimeHours      Decimal   @default(0) @map("break_time_hours") @db.Decimal(5, 2)
+  productiveHours     Decimal?  @map("productive_hours") @db.Decimal(5, 2)
+
+  // Progress
+  progressToday       Decimal   @default(0) @map("progress_today") @db.Decimal(5, 2)
+  cumulativeProgress  Decimal   @default(0) @map("cumulative_progress") @db.Decimal(5, 2)
+  previousProgress    Decimal   @default(0) @map("previous_progress") @db.Decimal(5, 2)
+  progressDescription String?   @map("progress_description") @db.Text
+
+  // Work Details
+  workCompleted       Json?     @map("work_completed") // Array of strings
+  workInProgress      Json?     @map("work_in_progress")
+  workPending         Json?     @map("work_pending")
+
+  // Labor
+  laborAttendance     Json?     @map("labor_attendance") // Array of objects
+  totalLaborCount     Int       @default(0) @map("total_labor_count")
+  totalLaborCost      Decimal   @default(0) @map("total_labor_cost") @db.Decimal(15, 2)
+
+  // Equipment
+  equipmentUsage      Json?     @map("equipment_usage") // Array of objects
+  totalEquipmentCost  Decimal   @default(0) @map("total_equipment_cost") @db.Decimal(15, 2)
+
+  // Materials
+  materialsConsumed   Json?     @map("materials_consumed") // Array of objects
+  totalMaterialCost   Decimal   @default(0) @map("total_material_cost") @db.Decimal(15, 2)
+
+  // Cost
+  dailyCost           Decimal   @default(0) @map("daily_cost") @db.Decimal(15, 2)
+
+  // Quality & Safety
+  qualityChecks       Json?     @map("quality_checks")
+  safetyObservations  Json?     @map("safety_observations")
+  safetyIncidents     Json?     @map("safety_incidents")
+
+  // Issues & Delays
+  issues              Json?
+  delays              Json?
+  totalDelayHours     Decimal   @default(0) @map("total_delay_hours") @db.Decimal(5, 2)
+
+  // Weather
+  weatherConditions   Json?     @map("weather_conditions")
+
+  // Photos
+  photos              Json?     // Array of photo objects
+
+  // Remarks
+  engineerRemarks     String?   @map("engineer_remarks") @db.Text
+  supervisorRemarks   String?   @map("supervisor_remarks") @db.Text
+
+  // Review
+  reviewStatus        ReviewStatus @default(PENDING) @map("review_status")
+  reviewedBy          String?   @map("reviewed_by")
+  reviewedAt          DateTime? @map("reviewed_at")
+  reviewComments      String?   @map("review_comments") @db.Text
+
+  // Submission
+  reportedBy          String    @map("reported_by")
+  submittedAt         DateTime  @default(now()) @map("submitted_at")
+  submissionStatus    String    @default("submitted") @map("submission_status")
+
+  // Geolocation
+  submissionLatitude  Decimal?  @map("submission_latitude") @db.Decimal(10, 8)
+  submissionLongitude Decimal?  @map("submission_longitude") @db.Decimal(11, 8)
+  locationVerified    Boolean   @default(false) @map("location_verified")
+
+  // AI Insights
+  aiInsights          String?   @map("ai_insights") @db.Text
+  aiGeneratedAt       DateTime? @map("ai_generated_at")
+
+  // Relations
+  task                Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("daily_progress_reports")
+  @@index([taskId])
+  @@index([projectId])
+  @@index([reportDate])
+  @@index([reviewStatus])
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVISION_REQUIRED
+}
+
+// ============================================
+// TASK MATERIALS
+// ============================================
+
+model TaskMaterial {
+  id                    String    @id @default(uuid())
+  taskId                String    @map("task_id")
+  materialId            String    @map("material_id")
+  materialName          String    @map("material_name")
+  category              String
+
+  // Estimation
+  estimatedQuantity     Decimal   @map("estimated_quantity") @db.Decimal(12, 2)
+  unit                  String
+  estimatedUnitRate     Decimal   @map("estimated_unit_rate") @db.Decimal(12, 2)
+  estimatedTotal        Decimal   @map("estimated_total") @db.Decimal(15, 2)
+
+  // Reservation
+  reservationStatus     ReservationStatus @default(PENDING) @map("reservation_status")
+  reservedQuantity      Decimal   @default(0) @map("reserved_quantity") @db.Decimal(12, 2)
+  warehouseLocation     String?   @map("warehouse_location")
+  reservationDate       DateTime? @map("reservation_date")
+  requiredByDate        DateTime  @map("required_by_date") @db.Date
+
+  // Actual Consumption
+  actualQuantity        Decimal   @default(0) @map("actual_quantity") @db.Decimal(12, 2)
+  actualRate            Decimal?  @map("actual_rate") @db.Decimal(12, 2)
+  actualTotal           Decimal   @default(0) @map("actual_total") @db.Decimal(15, 2)
+  consumptionDate       DateTime? @map("consumption_date")
+  wastageQuantity       Decimal   @default(0) @map("wastage_quantity") @db.Decimal(12, 2)
+  wastageReason         String?   @map("wastage_reason") @db.Text
+
+  // Procurement
+  inventoryAvailable    Boolean   @default(false) @map("inventory_available")
+  purchaseRequestId     String?   @map("purchase_request_id")
+  purchaseOrderId       String?   @map("purchase_order_id")
+  expectedDeliveryDate  DateTime? @map("expected_delivery_date") @db.Date
+
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  task                  Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("task_materials")
+  @@index([taskId])
+  @@index([materialId])
+  @@index([reservationStatus])
+}
+
+enum ReservationStatus {
+  PENDING
+  PARTIAL
+  RESERVED
+  ISSUED
+}
+
+// ============================================
+// TASK RESOURCES
+// ============================================
+
+model TaskResource {
+  id                  String       @id @default(uuid())
+  taskId              String       @map("task_id")
+  resourceType        ResourceType @map("resource_type")
+  resourceId          String       @map("resource_id")
+  resourceName        String       @map("resource_name")
+
+  // Allocation
+  startDate           DateTime     @map("start_date") @db.Date
+  endDate             DateTime     @map("end_date") @db.Date
+  allocationPercent   Int          @default(100) @map("allocation_percent")
+  hoursPerDay         Decimal?     @map("hours_per_day") @db.Decimal(5, 2)
+
+  // Cost
+  ratePerHour         Decimal?     @map("rate_per_hour") @db.Decimal(10, 2)
+  ratePerDay          Decimal?     @map("rate_per_day") @db.Decimal(10, 2)
+  estimatedCost       Decimal      @default(0) @map("estimated_cost") @db.Decimal(15, 2)
+  actualCost          Decimal      @default(0) @map("actual_cost") @db.Decimal(15, 2)
+
+  // Status
+  status              String       @default("reserved")
+  notes               String?      @db.Text
+
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  task                Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("task_resources")
+  @@index([taskId])
+  @@index([resourceType, resourceId])
+}
+
+// ============================================
+// TASK CHECKLISTS
+// ============================================
+
+model TaskChecklist {
+  id          String    @id @default(uuid())
+  taskId      String    @map("task_id")
+  item        String
+  sortOrder   Int       @default(0) @map("sort_order")
+  mandatory   Boolean   @default(false)
+  completed   Boolean   @default(false)
+  completedBy String?   @map("completed_by")
+  completedAt DateTime? @map("completed_at")
+  notes       String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("task_checklists")
+  @@index([taskId])
+  @@index([completed])
+}
+
+// ============================================
+// TASK COMMENTS
+// ============================================
+
+model TaskComment {
+  id          String    @id @default(uuid())
+  taskId      String    @map("task_id")
+  userId      String    @map("user_id")
+  comment     String    @db.Text
+  parentId    String?   @map("parent_id")
+  attachments Json?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  // Relations
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("task_comments")
+  @@index([taskId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ============================================
+// TASK ATTACHMENTS
+// ============================================
+
+model TaskAttachment {
+  id          String   @id @default(uuid())
+  taskId      String   @map("task_id")
+  fileName    String   @map("file_name")
+  fileUrl     String   @map("file_url")
+  fileType    String   @map("file_type")
+  fileSize    BigInt   @map("file_size")
+  mimeType    String?  @map("mime_type")
+  uploadedBy  String   @map("uploaded_by")
+  description String?  @db.Text
+  category    String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("task_attachments")
+  @@index([taskId])
+  @@index([uploadedBy])
+}
+
+// ============================================
+// TASK ALERTS
+// ============================================
+
+model TaskAlert {
+  id          String    @id @default(uuid())
+  taskId      String    @map("task_id")
+  type        String    // schedule_delay, budget_overrun, ai_risk_alert, etc.
+  severity    AlertSeverity @default(INFO)
+  message     String    @db.Text
+  details     Json?
+  actionTaken Boolean   @default(false) @map("action_taken")
+  dismissedAt DateTime? @map("dismissed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("task_alerts")
+  @@index([taskId])
+  @@index([type])
+  @@index([severity])
+  @@index([createdAt])
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+  URGENT
+}
+
+// ============================================
+// TASK COST TRACKING
+// ============================================
+
+model TaskCostEntry {
+  id          String   @id @default(uuid())
+  taskId      String   @map("task_id")
+  type        String   // labor, equipment, material, overhead
+  amount      Decimal  @db.Decimal(15, 2)
+  date        DateTime @db.Date
+  description String?  @db.Text
+  referenceId String?  @map("reference_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("task_cost_entries")
+  @@index([taskId])
+  @@index([type])
+  @@index([date])
+}
+
+// ============================================
+// BOQ & BUDGET MANAGEMENT
+// ============================================
+
+model BOQ {
+  id                 String    @id @default(uuid())
+  projectId          String    @map("project_id")
+  name               String
+  description        String?
+  version            Int       @default(1)
+  status             BOQStatus @default(DRAFT)
+  totalEstimatedCost Decimal   @default(0) @map("total_estimated_cost") @db.Decimal(15, 2)
+  approvedBy         String?   @map("approved_by")
+  approvedAt         DateTime? @map("approved_at")
+  createdBy          String    @map("created_by")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator    User      @relation("BOQCreator", fields: [createdBy], references: [id])
+  approver   User?     @relation("BOQApprover", fields: [approvedBy], references: [id])
+  items      BOQItem[]
+
+  @@map("boq")
+  @@index([projectId])
+  @@index([status])
+}
+
+enum BOQStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+model BOQItem {
+  id          String   @id @default(uuid())
+  boqId       String   @map("boq_id")
+  category    String
+  name        String
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  boq       BOQ           @relation(fields: [boqId], references: [id], onDelete: Cascade)
+  lineItems BOQLineItem[]
+
+  @@map("boq_items")
+  @@index([boqId])
+  @@index([category])
+}
+
+model BOQLineItem {
+  id          String  @id @default(uuid())
+  boqItemId   String  @map("boq_item_id")
+  description String
+  unit        String
+  quantity    Decimal @db.Decimal(12, 2)
+  rate        Decimal @db.Decimal(12, 2)
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  boqItem BOQItem @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
+
+  @@map("boq_line_items")
+  @@index([boqItemId])
+}
+
+model Budget {
+  id              String   @id @default(uuid())
+  projectId       String   @map("project_id")
+  category        String
+  allocatedAmount Decimal  @map("allocated_amount") @db.Decimal(15, 2)
+  spentAmount     Decimal  @default(0) @map("spent_amount") @db.Decimal(15, 2)
+  fiscalYear      Int?     @map("fiscal_year")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  expenses Expense[]
+
+  @@map("budgets")
+  @@index([projectId])
+  @@index([category])
+}
+
+model Expense {
+  id            String        @id @default(uuid())
+  projectId     String        @map("project_id")
+  budgetId      String?       @map("budget_id")
+  category      String
+  description   String
+  amount        Decimal       @db.Decimal(15, 2)
+  expenseDate   DateTime      @map("expense_date") @db.Date
+  vendorName    String?       @map("vendor_name")
+  invoiceNumber String?       @map("invoice_number")
+  paymentStatus PaymentStatus @default(PENDING) @map("payment_status")
+  paymentDate   DateTime?     @map("payment_date") @db.Date
+  receiptUrl    String?       @map("receipt_url")
+  approvedBy    String?       @map("approved_by")
+  approvedAt    DateTime?     @map("approved_at")
+  createdBy     String        @map("created_by")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budget   Budget? @relation(fields: [budgetId], references: [id], onDelete: SetNull)
+  creator  User    @relation("ExpenseCreator", fields: [createdBy], references: [id])
+  approver User?   @relation("ExpenseApprover", fields: [approvedBy], references: [id])
+
+  @@map("expenses")
+  @@index([projectId])
+  @@index([budgetId])
+  @@index([category])
+  @@index([expenseDate])
+  @@index([paymentStatus])
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+// ============================================
+// RESOURCE MANAGEMENT
+// ============================================
+
+model Worker {
+  id              String       @id @default(uuid())
+  name            String
+  contactNumber   String?      @map("contact_number")
+  email           String?
+  skillType       String       @map("skill_type")
+  experienceYears Int?         @map("experience_years")
+  dailyWage       Decimal?     @map("daily_wage") @db.Decimal(10, 2)
+  status          WorkerStatus @default(ACTIVE)
+  joinedDate      DateTime?    @map("joined_date") @db.Date
+  leftDate        DateTime?    @map("left_date") @db.Date
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  @@map("workers")
+  @@index([skillType])
+  @@index([status])
+}
+
+enum WorkerStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+}
+
+model Equipment {
+  id                  String          @id @default(uuid())
+  name                String
+  equipmentType       String          @map("equipment_type")
+  model               String?
+  serialNumber        String?         @map("serial_number")
+  purchaseDate        DateTime?       @map("purchase_date") @db.Date
+  purchaseCost        Decimal?        @map("purchase_cost") @db.Decimal(15, 2)
+  dailyRentalCost     Decimal?        @map("daily_rental_cost") @db.Decimal(10, 2)
+  status              EquipmentStatus @default(AVAILABLE)
+  lastMaintenanceDate DateTime?       @map("last_maintenance_date") @db.Date
+  nextMaintenanceDate DateTime?       @map("next_maintenance_date") @db.Date
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  @@map("equipment")
+  @@index([equipmentType])
+  @@index([status])
+}
+
+enum EquipmentStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+  BROKEN
+}
+
+model Vehicle {
+  id                 String        @id @default(uuid())
+  vehicleNumber      String        @unique @map("vehicle_number")
+  vehicleType        String        @map("vehicle_type")
+  model              String?
+  capacity           String?
+  fuelType           String?       @map("fuel_type")
+  status             VehicleStatus @default(AVAILABLE)
+  lastServiceDate    DateTime?     @map("last_service_date") @db.Date
+  nextServiceDate    DateTime?     @map("next_service_date") @db.Date
+  insuranceExpiryDate DateTime?     @map("insurance_expiry_date") @db.Date
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  @@map("vehicles")
+  @@index([vehicleNumber])
+  @@index([status])
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+}
+
+model ResourceAllocation {
+  id            String       @id @default(uuid())
+  projectId     String       @map("project_id")
+  resourceType  ResourceType @map("resource_type")
+  resourceId    String       @map("resource_id")
+  allocatedFrom DateTime     @map("allocated_from") @db.Date
+  allocatedTo   DateTime     @map("allocated_to") @db.Date
+  shift         String?
+  notes         String?
+  allocatedBy   String       @map("allocated_by")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  allocator User    @relation(fields: [allocatedBy], references: [id])
+
+  @@map("resource_allocations")
+  @@index([projectId])
+  @@index([resourceType, resourceId])
+  @@index([allocatedFrom, allocatedTo])
+}
+
+enum ResourceType {
+  WORKER
+  EQUIPMENT
+  VEHICLE
+}
+
+// ============================================
+// MATERIAL & PURCHASE MANAGEMENT
+// ============================================
+
+model Material {
+  id            String         @id @default(uuid())
+  name          String
+  description   String?
+  category      String
+  unit          String
+  currentStock  Decimal        @default(0) @map("current_stock") @db.Decimal(12, 2)
+  minStockLevel Decimal        @default(0) @map("min_stock_level") @db.Decimal(12, 2)
+  maxStockLevel Decimal?       @map("max_stock_level") @db.Decimal(12, 2)
+  unitCost      Decimal?       @map("unit_cost") @db.Decimal(12, 2)
+  status        MaterialStatus @default(ACTIVE)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  inventory          Inventory[]
+  purchaseOrderItems PurchaseOrderItem[]
+
+  @@map("materials")
+  @@index([category])
+  @@index([status])
+}
+
+enum MaterialStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Inventory {
+  id            String   @id @default(uuid())
+  projectId     String   @map("project_id")
+  materialId    String   @map("material_id")
+  quantity      Decimal  @default(0) @db.Decimal(12, 2)
+  location      String?
+  lastUpdatedAt DateTime @default(now()) @map("last_updated_at")
+
+  // Relations
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, materialId])
+  @@map("inventory")
+  @@index([projectId])
+  @@index([materialId])
+}
+
+model StockMovement {
+  id            String   @id @default(uuid())
+  projectId     String   @map("project_id")
+  materialId    String   @map("material_id")
+  movementType  String   @map("movement_type")
+  quantity      Decimal  @db.Decimal(12, 2)
+  referenceType String?  @map("reference_type")
+  referenceId   String?  @map("reference_id")
+  notes         String?
+  movedBy       String   @map("moved_by")
+  movedAt       DateTime @default(now()) @map("moved_at")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  mover   User    @relation(fields: [movedBy], references: [id])
+
+  @@map("stock_movements")
+  @@index([projectId])
+  @@index([movedAt])
+}
+
+model Vendor {
+  id            String       @id @default(uuid())
+  name          String
+  contactPerson String?      @map("contact_person")
+  phone         String?
+  email         String?
+  address       String?
+  gstin         String?
+  rating        Decimal?     @db.Decimal(3, 2)
+  status        VendorStatus @default(ACTIVE)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  purchaseOrders PurchaseOrder[]
+
+  @@map("vendors")
+  @@index([status])
+  @@index([name])
+}
+
+enum VendorStatus {
+  ACTIVE
+  INACTIVE
+  BLACKLISTED
+}
+
+model PurchaseRequest {
+  id              String                @id @default(uuid())
+  projectId       String                @map("project_id")
+  requestNumber   String                @unique @map("request_number")
+  description     String?
+  priority        PurchaseRequestPriority @default(MEDIUM)
+  status          PurchaseRequestStatus @default(PENDING)
+  requiredBy      DateTime              @map("required_by") @db.Date
+  requestedBy     String                @map("requested_by")
+  approvedBy      String?               @map("approved_by")
+  approvedAt      DateTime?             @map("approved_at")
+  rejectionReason String?               @map("rejection_reason")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  // Relations
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requester   User             @relation("PRRequester", fields: [requestedBy], references: [id])
+  approver    User?            @relation("PRApprover", fields: [approvedBy], references: [id])
+  purchaseOrders PurchaseOrder[]
+
+  @@map("purchase_requests")
+  @@index([projectId])
+  @@index([status])
+  @@index([requestNumber])
+}
+
+enum PurchaseRequestPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum PurchaseRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ORDERED
+}
+
+model PurchaseOrder {
+  id                   String              @id @default(uuid())
+  purchaseRequestId    String?             @map("purchase_request_id")
+  projectId            String              @map("project_id")
+  vendorId             String              @map("vendor_id")
+  orderNumber          String              @unique @map("order_number")
+  orderDate            DateTime            @map("order_date") @db.Date
+  expectedDeliveryDate DateTime?           @map("expected_delivery_date") @db.Date
+  actualDeliveryDate   DateTime?           @map("actual_delivery_date") @db.Date
+  totalAmount          Decimal             @map("total_amount") @db.Decimal(15, 2)
+  taxAmount            Decimal             @default(0) @map("tax_amount") @db.Decimal(15, 2)
+  status               PurchaseOrderStatus @default(PENDING)
+  paymentTerms         String?             @map("payment_terms")
+  notes                String?
+  createdBy            String              @map("created_by")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+
+  // Relations
+  purchaseRequest PurchaseRequest?    @relation(fields: [purchaseRequestId], references: [id], onDelete: SetNull)
+  project         Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendor          Vendor              @relation(fields: [vendorId], references: [id])
+  creator         User                @relation(fields: [createdBy], references: [id])
+  items           PurchaseOrderItem[]
+
+  @@map("purchase_orders")
+  @@index([projectId])
+  @@index([vendorId])
+  @@index([status])
+  @@index([orderNumber])
+}
+
+enum PurchaseOrderStatus {
+  PENDING
+  CONFIRMED
+  PARTIAL_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+model PurchaseOrderItem {
+  id               String   @id @default(uuid())
+  purchaseOrderId  String   @map("purchase_order_id")
+  materialId       String   @map("material_id")
+  description      String?
+  quantity         Decimal  @db.Decimal(12, 2)
+  unitPrice        Decimal  @map("unit_price") @db.Decimal(12, 2)
+  receivedQuantity Decimal  @default(0) @map("received_quantity") @db.Decimal(12, 2)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  // Relations
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  material      Material      @relation(fields: [materialId], references: [id])
+
+  @@map("purchase_order_items")
+  @@index([purchaseOrderId])
+  @@index([materialId])
+}
+
+// ============================================
+// SITE EXECUTION
+// ============================================
+
+model DailyReport {
+  id                String   @id @default(uuid())
+  projectId         String   @map("project_id")
+  reportDate        DateTime @map("report_date") @db.Date
+  weather           String?
+  temperature       String?
+  workersPresent    Int      @default(0) @map("workers_present")
+  workersAbsent     Int      @default(0) @map("workers_absent")
+  workSummary       String   @map("work_summary")
+  challengesFaced   String?  @map("challenges_faced")
+  materialsConsumed String?  @map("materials_consumed")
+  equipmentUsed     String?  @map("equipment_used")
+  safetyIncidents   String?  @map("safety_incidents")
+  visitors          String?
+  submittedBy       String   @map("submitted_by")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  submitter User         @relation(fields: [submittedBy], references: [id])
+  images  ReportImage[]
+
+  @@unique([projectId, reportDate])
+  @@map("daily_reports")
+  @@index([projectId])
+  @@index([reportDate])
+  @@index([submittedBy])
+}
+
+model ReportImage {
+  id             String   @id @default(uuid())
+  dailyReportId  String   @map("daily_report_id")
+  imageUrl       String   @map("image_url")
+  caption        String?
+  uploadedAt     DateTime @default(now()) @map("uploaded_at")
+
+  // Relations
+  dailyReport DailyReport @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+
+  @@map("report_images")
+  @@index([dailyReportId])
+}
+
+model SafetyChecklist {
+  id                    String   @id @default(uuid())
+  projectId             String   @map("project_id")
+  checklistDate         DateTime @map("checklist_date") @db.Date
+  ppeAvailable          Boolean  @default(false) @map("ppe_available")
+  fireExtinguisherCheck Boolean  @default(false) @map("fire_extinguisher_check")
+  firstAidKitCheck      Boolean  @default(false) @map("first_aid_kit_check")
+  scaffoldingSafe       Boolean  @default(false) @map("scaffolding_safe")
+  electricalSafetyCheck Boolean  @default(false) @map("electrical_safety_check")
+  housekeepingStatus    String?  @map("housekeeping_status")
+  incidentsReported     Int      @default(0) @map("incidents_reported")
+  notes                 String?
+  checkedBy             String   @map("checked_by")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  checker User    @relation(fields: [checkedBy], references: [id])
+
+  @@map("safety_checklists")
+  @@index([projectId])
+  @@index([checklistDate])
+}
+
+model SiteIssue {
+  id              String           @id @default(uuid())
+  projectId       String           @map("project_id")
+  taskId          String?          @map("task_id")
+  issueType       String           @map("issue_type")
+  severity        IssueSeverity    @default(MEDIUM)
+  title           String
+  description     String
+  status          SiteIssueStatus  @default(OPEN)
+  reportedBy      String           @map("reported_by")
+  assignedTo      String?          @map("assigned_to")
+  resolvedBy      String?          @map("resolved_by")
+  resolvedAt      DateTime?        @map("resolved_at")
+  resolutionNotes String?          @map("resolution_notes")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task     Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  reporter User    @relation("IssueReporter", fields: [reportedBy], references: [id])
+  assignee User?   @relation("IssueAssignee", fields: [assignedTo], references: [id])
+  resolver User?   @relation("IssueResolver", fields: [resolvedBy], references: [id])
+
+  @@map("site_issues")
+  @@index([projectId])
+  @@index([status])
+  @@index([severity])
+  @@index([issueType])
+}
+
+enum IssueSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SiteIssueStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+// ============================================
+// AI & ANALYTICS
+// ============================================
+
+model AIInsight {
+  id              String    @id @default(uuid())
+  projectId       String    @map("project_id")
+  insightType     String    @map("insight_type")
+  title           String
+  description     String
+  severity        String?
+  confidenceScore Decimal?  @map("confidence_score") @db.Decimal(5, 2)
+  data            Json?
+  actionTaken     Boolean   @default(false) @map("action_taken")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  expiresAt       DateTime? @map("expires_at")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("ai_insights")
+  @@index([projectId])
+  @@index([insightType])
+  @@index([severity])
+  @@index([createdAt])
+}
+
+model AIPrediction {
+  id             String    @id @default(uuid())
+  projectId      String    @map("project_id")
+  taskId         String?   @map("task_id")
+  predictionType String    @map("prediction_type")
+  predictedValue Json      @map("predicted_value")
+  actualValue    Json?     @map("actual_value")
+  accuracy       Decimal?  @db.Decimal(5, 2)
+  modelVersion   String?   @map("model_version")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  verifiedAt     DateTime? @map("verified_at")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task    Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("ai_predictions")
+  @@index([projectId])
+  @@index([taskId])
+  @@index([predictionType])
+}
+
+// ============================================
+// SYSTEM TABLES
+// ============================================
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  type      String
+  title     String
+  message   String
+  priority  String    @default("normal")
+  read      Boolean   @default(false)
+  readAt    DateTime? @map("read_at")
+  actionUrl String?   @map("action_url")
+  metadata  Json?
+  createdAt DateTime  @default(now()) @map("created_at")
+  expiresAt DateTime? @map("expires_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+  @@index([type])
+}
+
+model AuditLog {
+  id         String    @id @default(uuid())
+  userId     String?   @map("user_id")
+  action     String
+  entityType String    @map("entity_type")
+  entityId   String?   @map("entity_id")
+  oldValues  Json?     @map("old_values")
+  newValues  Json?     @map("new_values")
+  ipAddress  String?   @map("ip_address")
+  userAgent  String?   @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model FileUpload {
+  id         String   @id @default(uuid())
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  fileName   String   @map("file_name")
+  filePath   String   @map("file_path")
+  fileType   String   @map("file_type")
+  fileSize   BigInt   @map("file_size")
+  mimeType   String?  @map("mime_type")
+  uploadedBy String   @map("uploaded_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  uploader User @relation(fields: [uploadedBy], references: [id])
+
+  @@map("file_uploads")
+  @@index([entityType, entityId])
+  @@index([uploadedBy])
+  @@index([createdAt])
+}
+
+model Setting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       Json
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+  @@index([key])
+}
