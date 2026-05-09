@@ -184,20 +184,49 @@ exports.createProject = async (req, res, next) => {
 exports.updateProject = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const body = req.body;
 
-    // Convert dates if provided
-    if (updateData.startDate) {
-      updateData.startDate = new Date(updateData.startDate);
+    // Separate core DB columns from extended details
+    const coreColumnFields = ['name', 'description', 'projectType', 'location', 'startDate', 'endDate', 'status', 'progress', 'budget', 'spentAmount'];
+    const prismaData = {};
+    const detailsUpdate = {};
+
+    Object.keys(body).forEach(key => {
+      if (coreColumnFields.includes(key)) {
+        prismaData[key] = body[key];
+      } else {
+        detailsUpdate[key] = body[key];
+      }
+    });
+
+    // Convert dates if provided (remove empty strings)
+    if (prismaData.startDate) {
+      prismaData.startDate = new Date(prismaData.startDate);
+    } else if (prismaData.startDate === '') {
+      delete prismaData.startDate;
     }
-    if (updateData.endDate) {
-      updateData.endDate = new Date(updateData.endDate);
+    if (prismaData.endDate) {
+      prismaData.endDate = new Date(prismaData.endDate);
+    } else if (prismaData.endDate === '') {
+      delete prismaData.endDate;
     }
-    if (updateData.budget) {
-      updateData.budget = parseFloat(updateData.budget);
+    if (prismaData.budget) {
+      prismaData.budget = parseFloat(prismaData.budget);
+    } else if (prismaData.budget === '') {
+      delete prismaData.budget;
     }
-    if (Object.prototype.hasOwnProperty.call(updateData, 'progress')) {
-      const progress = parseFloat(updateData.progress);
+    // Remove empty string values for optional fields
+    if (prismaData.description === '') {
+      delete prismaData.description;
+    }
+    if (prismaData.location === '') {
+      delete prismaData.location;
+    }
+    if (prismaData.projectType === '') {
+      delete prismaData.projectType;
+    }
+    if (Object.prototype.hasOwnProperty.call(prismaData, 'progress')) {
+      const progress = parseFloat(prismaData.progress);
 
       if (Number.isNaN(progress) || progress < 0 || progress > 100) {
         return res.status(400).json({
@@ -206,12 +235,19 @@ exports.updateProject = async (req, res, next) => {
         });
       }
 
-      updateData.progress = progress;
+      prismaData.progress = progress;
+    }
+
+    // Merge new details with existing details
+    if (Object.keys(detailsUpdate).length > 0) {
+      const existing = await prisma.project.findUnique({ where: { id }, select: { details: true } });
+      const existingDetails = existing?.details || {};
+      prismaData.details = { ...existingDetails, ...detailsUpdate };
     }
 
     const project = await prisma.project.update({
       where: { id },
-      data: updateData,
+      data: prismaData,
       include: {
         creator: {
           select: {

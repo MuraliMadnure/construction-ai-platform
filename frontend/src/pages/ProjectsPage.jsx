@@ -5,6 +5,12 @@ import projectService from '../services/project.service';
 
 const ProjectsPage = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editData, setEditData] = useState({});
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [projectToClose, setProjectToClose] = useState(null);
+  const [closeReason, setCloseReason] = useState('COMPLETED');
+  const [closeRemarks, setCloseRemarks] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [projects, setProjects] = useState([]);
@@ -134,13 +140,71 @@ const ProjectsPage = () => {
     }
   };
 
+  const handleCloseProject = async () => {
+    if (!projectToClose) return;
+    try {
+      await projectService.update(projectToClose.id, {
+        status: closeReason,
+        closedAt: new Date().toISOString(),
+        closeRemarks: closeRemarks
+      });
+      toast.success(`Project ${closeReason === 'COMPLETED' ? 'completed' : 'cancelled'} successfully!`);
+      setShowCloseModal(false);
+      setProjectToClose(null);
+      setCloseReason('COMPLETED');
+      setCloseRemarks('');
+      loadProjects();
+    } catch (error) {
+      console.error('Failed to close project:', error);
+      toast.error(error.response?.data?.message || 'Failed to close project');
+    }
+  };
+
+  const openEditModal = (project) => {
+    const details = project.details || {};
+    setEditData({
+      id: project.id,
+      name: project.name || '',
+      description: project.description || '',
+      location: project.location || '',
+      startDate: project.startDate ? project.startDate.split('T')[0] : '',
+      endDate: project.endDate ? project.endDate.split('T')[0] : '',
+      budget: project.budget || '',
+      status: project.status || 'PLANNING',
+      projectType: details.projectType || 'RESIDENTIAL',
+      priority: details.priority || 'MEDIUM',
+      clientName: details.clientName || '',
+      clientContact: details.clientContact || '',
+      clientEmail: details.clientEmail || '',
+      contractorName: details.contractorName || '',
+      contractorContact: details.contractorContact || '',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditProject = async (e) => {
+    e.preventDefault();
+    try {
+      const { id, ...updateData } = editData;
+      await projectService.update(id, updateData);
+      toast.success('Project updated successfully!');
+      setShowEditModal(false);
+      setEditData({});
+      loadProjects();
+    } catch (error) {
+      console.error('Failed to update project:', error);
+      toast.error(error.response?.data?.message || 'Failed to update project');
+    }
+  };
+
   const getStatusColor = (status) => {
     const statusLower = status?.toLowerCase();
     const colors = {
       active: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
       planning: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
       completed: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
-      on_hold: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+      on_hold: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+      cancelled: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
     };
     return colors[statusLower] || colors.planning;
   };
@@ -152,7 +216,8 @@ const ProjectsPage = () => {
       active: 'Active',
       planning: 'Planning',
       completed: 'Completed',
-      on_hold: 'On Hold'
+      on_hold: 'On Hold',
+      cancelled: 'Cancelled'
     };
     return labels[statusLower] || status;
   };
@@ -218,6 +283,7 @@ const ProjectsPage = () => {
               <option value="planning">Planning</option>
               <option value="completed">Completed</option>
               <option value="on_hold">On Hold</option>
+              <option value="cancelled">Cancelled</option>
             </select>
           </div>
           <button
@@ -293,7 +359,18 @@ const ProjectsPage = () => {
                   Invalid Project
                 </button>
               )}
-              <button className="btn-ghost">Edit</button>
+              <button className="btn-ghost" onClick={() => openEditModal(project)}>Edit</button>
+              {project.status?.toLowerCase() !== 'completed' && project.status?.toLowerCase() !== 'cancelled' && (
+                <button
+                  className="btn-ghost text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  onClick={() => {
+                    setProjectToClose(project);
+                    setShowCloseModal(true);
+                  }}
+                >
+                  Close
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -302,6 +379,251 @@ const ProjectsPage = () => {
       {filteredProjects.length === 0 && (
         <div className="card text-center py-12">
           <p className="text-gray-500 dark:text-gray-400">No projects found matching your criteria</p>
+        </div>
+      )}
+
+      {/* Edit Project Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold">Edit Project</h2>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-2xl"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleEditProject} className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Project Name *</label>
+                <input
+                  type="text"
+                  className="input"
+                  value={editData.name}
+                  onChange={(e) => setEditData({...editData, name: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Status</label>
+                  <select
+                    className="input"
+                    value={editData.status}
+                    onChange={(e) => setEditData({...editData, status: e.target.value})}
+                  >
+                    <option value="PLANNING">Planning</option>
+                    <option value="ACTIVE">Active</option>
+                    <option value="ON_HOLD">On Hold</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="CANCELLED">Cancelled</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Project Type</label>
+                  <select
+                    className="input"
+                    value={editData.projectType}
+                    onChange={(e) => setEditData({...editData, projectType: e.target.value})}
+                  >
+                    <option value="RESIDENTIAL">Residential</option>
+                    <option value="COMMERCIAL">Commercial</option>
+                    <option value="INDUSTRIAL">Industrial</option>
+                    <option value="INFRASTRUCTURE">Infrastructure</option>
+                    <option value="RENOVATION">Renovation</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Priority</label>
+                  <select
+                    className="input"
+                    value={editData.priority}
+                    onChange={(e) => setEditData({...editData, priority: e.target.value})}
+                  >
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
+                    <option value="CRITICAL">Critical</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Location</label>
+                <input
+                  type="text"
+                  className="input"
+                  value={editData.location}
+                  onChange={(e) => setEditData({...editData, location: e.target.value})}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Start Date</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={editData.startDate}
+                    onChange={(e) => setEditData({...editData, startDate: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">End Date</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={editData.endDate}
+                    onChange={(e) => setEditData({...editData, endDate: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Budget (₹)</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={editData.budget}
+                  onChange={(e) => setEditData({...editData, budget: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Description</label>
+                <textarea
+                  className="input"
+                  rows="3"
+                  value={editData.description}
+                  onChange={(e) => setEditData({...editData, description: e.target.value})}
+                ></textarea>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Client Name</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={editData.clientName}
+                    onChange={(e) => setEditData({...editData, clientName: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Client Contact</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={editData.clientContact}
+                    onChange={(e) => setEditData({...editData, clientContact: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Contractor Name</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={editData.contractorName}
+                    onChange={(e) => setEditData({...editData, contractorName: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Contractor Contact</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={editData.contractorContact}
+                    onChange={(e) => setEditData({...editData, contractorContact: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => setShowEditModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Close Project Modal */}
+      {showCloseModal && projectToClose && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full shadow-2xl">
+            <div className="p-6">
+              <h2 className="text-xl font-bold mb-2">Close Project</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                You are closing: <span className="font-semibold text-gray-700 dark:text-gray-200">{projectToClose.name}</span>
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Closure Type *</label>
+                  <select
+                    className="input"
+                    value={closeReason}
+                    onChange={(e) => setCloseReason(e.target.value)}
+                  >
+                    <option value="COMPLETED">Completed - Project finished successfully</option>
+                    <option value="CANCELLED">Cancelled - Project terminated</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Remarks</label>
+                  <textarea
+                    className="input"
+                    rows="3"
+                    placeholder="Reason for closing, final notes..."
+                    value={closeRemarks}
+                    onChange={(e) => setCloseRemarks(e.target.value)}
+                  ></textarea>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+              <button
+                className="btn-ghost"
+                onClick={() => {
+                  setShowCloseModal(false);
+                  setProjectToClose(null);
+                  setCloseReason('COMPLETED');
+                  setCloseRemarks('');
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className={`px-4 py-2 rounded-lg font-medium text-white ${
+                  closeReason === 'COMPLETED'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+                onClick={handleCloseProject}
+              >
+                {closeReason === 'COMPLETED' ? 'Mark as Completed' : 'Cancel Project'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
