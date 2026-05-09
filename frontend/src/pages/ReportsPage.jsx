@@ -11,22 +11,116 @@ const ReportsPage = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [currentSection, setCurrentSection] = useState(0);
   const [reportFormData, setReportFormData] = useState({
+    // Project Information
     projectId: '',
+    date: '',
+    reportedBy: '',
+    shift: 'DAY',
+
+    // Weather & Site Conditions
     weather: '',
+    temperature: '',
+    humidity: '',
+    siteConditions: '',
+
+    // Attendance
     workersCount: '',
+    skillType: '',
+    absentCount: '',
     workHours: '',
+    overtimeHours: '',
+
+    // Progress Details
     summary: '',
     completedTasks: '',
     pendingTasks: '',
-    materialsUsed: ''
+    delaysReasons: '',
+    completionPercentage: '',
+
+    // Material Consumption
+    materialsUsed: '',
+    materialWastage: '',
+    materialShortage: '',
+
+    // Equipment Usage
+    equipmentUsed: '',
+    equipmentBreakdown: '',
+    equipmentIdleTime: '',
+
+    // Safety Compliance
+    safetyObservations: '',
+    accidentsIncidents: '',
+    ppeCompliance: '',
+    safetyViolations: '',
+
+    // Quality Control
+    qualityInspections: '',
+    qualityIssues: '',
+    testingResults: '',
+
+    // Challenges & Issues
+    challenges: '',
+    obstaclesEncountered: '',
+    remedialActions: '',
+
+    // Tomorrow's Plan
+    plannedActivities: '',
+    requiredResources: '',
+    criticalActivities: '',
+
+    // Additional
+    visitorDetails: '',
+    photographs: '',
+    remarks: ''
   });
   const [issueFormData, setIssueFormData] = useState({
+    // Basic Information
     projectId: '',
     title: '',
     description: '',
     severity: 'MEDIUM',
-    issueType: 'QUALITY'
+    issueType: 'QUALITY',
+
+    // Location Details
+    location: '',
+    floor: '',
+    zone: '',
+    specificArea: '',
+
+    // Impact Assessment
+    impactLevel: 'MODERATE',
+    affectedArea: '',
+    estimatedCost: '',
+    timeImpact: '',
+
+    // Root Cause
+    rootCause: '',
+    causeCategory: '',
+    preventable: true,
+
+    // Corrective Actions
+    suggestedAction: '',
+    immediateAction: '',
+    correctiveAction: '',
+    preventiveAction: '',
+
+    // Responsibility
+    responsiblePerson: '',
+    assignedTo: '',
+    targetResolutionDate: '',
+
+    // Documentation
+    evidencePhotos: '',
+    relatedDocuments: '',
+    witnessDetails: '',
+
+    // Additional
+    priorityLevel: 'MEDIUM',
+    escalationRequired: false,
+    notifyStakeholders: false,
+    remarks: ''
   });
 
   // Fetch data from API
@@ -80,15 +174,48 @@ const ReportsPage = () => {
       await reportService.createDailyReport(reportFormData);
       toast.success('Report created successfully!');
       setShowReportModal(false);
+      setCurrentSection(0);
       setReportFormData({
         projectId: '',
+        date: '',
+        reportedBy: '',
+        shift: 'DAY',
         weather: '',
+        temperature: '',
+        humidity: '',
+        siteConditions: '',
         workersCount: '',
+        skillType: '',
+        absentCount: '',
         workHours: '',
+        overtimeHours: '',
         summary: '',
         completedTasks: '',
         pendingTasks: '',
-        materialsUsed: ''
+        delaysReasons: '',
+        completionPercentage: '',
+        materialsUsed: '',
+        materialWastage: '',
+        materialShortage: '',
+        equipmentUsed: '',
+        equipmentBreakdown: '',
+        equipmentIdleTime: '',
+        safetyObservations: '',
+        accidentsIncidents: '',
+        ppeCompliance: '',
+        safetyViolations: '',
+        qualityInspections: '',
+        qualityIssues: '',
+        testingResults: '',
+        challenges: '',
+        obstaclesEncountered: '',
+        remedialActions: '',
+        plannedActivities: '',
+        requiredResources: '',
+        criticalActivities: '',
+        visitorDetails: '',
+        photographs: '',
+        remarks: ''
       });
       loadData();
     } catch (error) {
@@ -103,12 +230,38 @@ const ReportsPage = () => {
       await reportService.createSiteIssue(issueFormData);
       toast.success('Issue reported successfully!');
       setShowReportModal(false);
+      setCurrentSection(0);
       setIssueFormData({
         projectId: '',
         title: '',
         description: '',
         severity: 'MEDIUM',
-        issueType: 'QUALITY'
+        issueType: 'QUALITY',
+        location: '',
+        floor: '',
+        zone: '',
+        specificArea: '',
+        impactLevel: 'MODERATE',
+        affectedArea: '',
+        estimatedCost: '',
+        timeImpact: '',
+        rootCause: '',
+        causeCategory: '',
+        preventable: true,
+        suggestedAction: '',
+        immediateAction: '',
+        correctiveAction: '',
+        preventiveAction: '',
+        responsiblePerson: '',
+        assignedTo: '',
+        targetResolutionDate: '',
+        evidencePhotos: '',
+        relatedDocuments: '',
+        witnessDetails: '',
+        priorityLevel: 'MEDIUM',
+        escalationRequired: false,
+        notifyStakeholders: false,
+        remarks: ''
       });
       loadData();
     } catch (error) {
