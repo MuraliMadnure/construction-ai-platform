@@ -62,7 +62,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
     ports:
-      - "5000:5000"
+      - "5001:5000"
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/logs:/app/logs
@@ -85,7 +85,7 @@ services:
     container_name: construction-ai-frontend
     restart: always
     ports:
-      - "80:80"
+      - "3080:80"
     networks:
       - construction-network
     depends_on:
