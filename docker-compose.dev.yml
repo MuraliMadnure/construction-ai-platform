@@ -7,10 +7,10 @@ services:
     container_name: construction-ai-postgres
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: CCTV@123
+      POSTGRES_PASSWORD: postgres123
       POSTGRES_DB: construction_ai_db
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -47,7 +47,7 @@ services:
     environment:
       NODE_ENV: development
       PORT: 5000
-      DATABASE_URL: postgresql://postgres:CCTV@123@postgres:5432/construction_ai_db
+      DATABASE_URL: postgresql://postgres:postgres123@postgres:5432/construction_ai_db
       REDIS_HOST: redis
       REDIS_PORT: 6379
       JWT_SECRET: dev-secret-key-change-in-production-min-32-chars
@@ -56,7 +56,7 @@ services:
       JWT_REFRESH_EXPIRES_IN: 7d
       CORS_ORIGIN: http://localhost:3000
     ports:
-      - "5000:5000"
+      - "5001:5000"
     volumes:
       - ./backend:/app
       - /app/node_modules
@@ -78,8 +78,8 @@ services:
       target: development
     container_name: construction-ai-frontend
     environment:
-      VITE_API_URL: http://localhost:5000/api/v1
-      VITE_SOCKET_URL: http://localhost:5000
+      VITE_API_URL: http://localhost:5001/api/v1
+      VITE_SOCKET_URL: http://localhost:5001
       VITE_ENV: development
       VITE_APP_NAME: Construction AI Platform
       VITE_APP_VERSION: 1.0.0
