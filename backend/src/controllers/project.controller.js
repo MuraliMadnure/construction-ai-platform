@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const logger = require('../utils/logger');
+const { cacheGet } = require('../utils/cache');
 
 const prisma = new PrismaClient();
 
@@ -72,10 +73,37 @@ exports.getAllProjects = async (req, res, next) => {
   }
 };
 
+// Helper: check if user has access to project
+const checkProjectAccess = async (projectId, userId, roles) => {
+  const isAdmin = roles && roles.includes('admin');
+  if (isAdmin) return { allowed: true };
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { createdBy: true }
+  });
+  if (!project) return { allowed: false, notFound: true };
+  if (project.createdBy === userId) return { allowed: true };
+
+  const membership = await prisma.projectMember.findFirst({
+    where: { projectId, userId }
+  });
+  return { allowed: !!membership };
+};
+
 // Get project by ID
 exports.getProjectById = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    // Authorization check
+    const access = await checkProjectAccess(id, req.user.id, req.user.roles);
+    if (access.notFound) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+    if (!access.allowed) {
+      return res.status(403).json({ success: false, message: 'You do not have access to this project' });
+    }
 
     const project = await prisma.project.findUnique({
       where: { id },
@@ -111,13 +139,6 @@ exports.getProjectById = async (req, res, next) => {
         }
       }
     });
-
-    if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project not found'
-      });
-    }
 
     res.json({
       success: true,
@@ -184,6 +205,24 @@ exports.createProject = async (req, res, next) => {
 exports.updateProject = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    // Authorization: must be creator, admin, or project manager member
+    const isAdmin = req.user.roles && req.user.roles.includes('admin');
+    if (!isAdmin) {
+      const project = await prisma.project.findUnique({ where: { id }, select: { createdBy: true } });
+      if (!project) {
+        return res.status(404).json({ success: false, message: 'Project not found' });
+      }
+      if (project.createdBy !== req.user.id) {
+        const membership = await prisma.projectMember.findFirst({
+          where: { projectId: id, userId: req.user.id, role: { in: ['manager', 'project_manager'] } }
+        });
+        if (!membership) {
+          return res.status(403).json({ success: false, message: 'You do not have permission to update this project' });
+        }
+      }
+    }
+
     const body = req.body;
 
     // Separate core DB columns from extended details
@@ -284,6 +323,18 @@ exports.deleteProject = async (req, res, next) => {
   try {
     const { id } = req.params;
 
+    // Authorization: only creator or admin can delete
+    const isAdmin = req.user.roles && req.user.roles.includes('admin');
+    if (!isAdmin) {
+      const project = await prisma.project.findUnique({ where: { id }, select: { createdBy: true } });
+      if (!project) {
+        return res.status(404).json({ success: false, message: 'Project not found' });
+      }
+      if (project.createdBy !== req.user.id) {
+        return res.status(403).json({ success: false, message: 'Only the project creator or admin can delete this project' });
+      }
+    }
+
     await prisma.project.delete({
       where: { id }
     });
@@ -311,31 +362,36 @@ exports.getProjectDashboard = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const [project, tasks, resources, expenses] = await Promise.all([
-      prisma.project.findUnique({
-        where: { id },
-        include: {
-          _count: {
-            select: {
-              tasks: true,
-              members: true
+    // Cache dashboard data for 2 minutes
+    const dashboardData = await cacheGet(`project:dashboard:${id}`, async () => {
+      return Promise.all([
+        prisma.project.findUnique({
+          where: { id },
+          include: {
+            _count: {
+              select: {
+                tasks: true,
+                members: true
+              }
             }
           }
-        }
-      }),
-      prisma.task.groupBy({
-        by: ['status'],
-        where: { projectId: id },
-        _count: true
-      }),
-      prisma.resourceAllocation.count({
-        where: { projectId: id }
-      }),
-      prisma.expense.aggregate({
-        where: { projectId: id },
-        _sum: { amount: true }
-      })
-    ]);
+        }),
+        prisma.task.groupBy({
+          by: ['status'],
+          where: { projectId: id },
+          _count: true
+        }),
+        prisma.resourceAllocation.count({
+          where: { projectId: id }
+        }),
+        prisma.expense.aggregate({
+          where: { projectId: id },
+          _sum: { amount: true }
+        })
+      ]);
+    }, 120);
+
+    const [project, tasks, resources, expenses] = dashboardData;
 
     if (!project) {
       return res.status(404).json({

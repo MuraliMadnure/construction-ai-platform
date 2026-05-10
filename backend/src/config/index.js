@@ -1,5 +1,15 @@
 require('dotenv').config();
 
+// Validate required secrets at startup
+const requiredSecrets = ['JWT_SECRET', 'JWT_REFRESH_SECRET'];
+if (process.env.NODE_ENV === 'production') {
+  for (const secret of requiredSecrets) {
+    if (!process.env[secret] || process.env[secret].length < 32) {
+      throw new Error(`${secret} must be set and at least 32 characters in production`);
+    }
+  }
+}
+
 const config = {
   server: {
     env: process.env.NODE_ENV || 'development',
@@ -12,10 +22,12 @@ const config = {
   },
 
   jwt: {
-    secret: process.env.JWT_SECRET || 'your-secret-key',
+    secret: process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? undefined : 'dev-only-secret-key-min-32-chars-long!!'),
     expiresIn: process.env.JWT_EXPIRES_IN || '15m',
-    refreshSecret: process.env.JWT_REFRESH_SECRET || 'your-refresh-secret',
-    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
+    refreshSecret: process.env.JWT_REFRESH_SECRET || (process.env.NODE_ENV === 'production' ? undefined : 'dev-only-refresh-secret-32-chars-long!!'),
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+    resetSecret: process.env.JWT_RESET_SECRET || (process.env.NODE_ENV === 'production' ? undefined : 'dev-only-reset-secret-32-chars-long!!!'),
+    algorithm: 'HS256'
   },
 
   redis: {
@@ -76,7 +88,7 @@ const config = {
   },
 
   session: {
-    secret: process.env.SESSION_SECRET || 'your-session-secret'
+    secret: process.env.SESSION_SECRET || (process.env.NODE_ENV === 'production' ? undefined : 'dev-only-session-secret-32-chars!!')
   },
 
   socket: {

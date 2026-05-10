@@ -8,7 +8,8 @@ const config = require('../config');
  */
 const generateAccessToken = (payload) => {
   return jwt.sign(payload, config.jwt.secret, {
-    expiresIn: config.jwt.expiresIn
+    expiresIn: config.jwt.expiresIn,
+    algorithm: config.jwt.algorithm
   });
 };
 
@@ -19,7 +20,20 @@ const generateAccessToken = (payload) => {
  */
 const generateRefreshToken = (payload) => {
   return jwt.sign(payload, config.jwt.refreshSecret, {
-    expiresIn: config.jwt.refreshExpiresIn
+    expiresIn: config.jwt.refreshExpiresIn,
+    algorithm: config.jwt.algorithm
+  });
+};
+
+/**
+ * Generate password reset token (uses separate secret)
+ * @param {Object} payload - Token payload
+ * @returns {String} JWT reset token
+ */
+const generateResetToken = (payload) => {
+  return jwt.sign(payload, config.jwt.resetSecret, {
+    expiresIn: '1h',
+    algorithm: config.jwt.algorithm
   });
 };
 
@@ -30,7 +44,9 @@ const generateRefreshToken = (payload) => {
  */
 const verifyAccessToken = (token) => {
   try {
-    return jwt.verify(token, config.jwt.secret);
+    return jwt.verify(token, config.jwt.secret, {
+      algorithms: [config.jwt.algorithm]
+    });
   } catch (error) {
     throw new Error('Invalid or expired token');
   }
@@ -43,9 +59,26 @@ const verifyAccessToken = (token) => {
  */
 const verifyRefreshToken = (token) => {
   try {
-    return jwt.verify(token, config.jwt.refreshSecret);
+    return jwt.verify(token, config.jwt.refreshSecret, {
+      algorithms: [config.jwt.algorithm]
+    });
   } catch (error) {
     throw new Error('Invalid or expired refresh token');
+  }
+};
+
+/**
+ * Verify password reset token
+ * @param {String} token - JWT reset token
+ * @returns {Object} Decoded payload
+ */
+const verifyResetToken = (token) => {
+  try {
+    return jwt.verify(token, config.jwt.resetSecret, {
+      algorithms: [config.jwt.algorithm]
+    });
+  } catch (error) {
+    throw new Error('Invalid or expired reset token');
   }
 };
 
@@ -67,7 +100,9 @@ const generateTokens = (payload) => {
 module.exports = {
   generateAccessToken,
   generateRefreshToken,
+  generateResetToken,
   verifyAccessToken,
   verifyRefreshToken,
+  verifyResetToken,
   generateTokens
 };

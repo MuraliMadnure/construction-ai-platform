@@ -1,46 +1,56 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, Outlet, Link, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useAuth } from './contexts/AuthContext';
 import NotificationBell from './components/Notifications/NotificationBell';
 import ProtectedRoute from './components/ProtectedRoute';
 
-// Import all page components
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import ProjectsPage from './pages/ProjectsPage';
-import ProjectDetailPage from './pages/ProjectDetailPage';
-import TasksPage from './pages/TasksPage';
-import MaterialsPage from './pages/MaterialsPage';
-import ReportsPage from './pages/ReportsPage';
-import AnalyticsPage from './pages/AnalyticsPage';
-import BOQPage from './pages/BOQPage';
-import ResourcesPage from './pages/ResourcesPage';
-import SettingsPage from './pages/SettingsPage';
+// Lazy-loaded page components for code splitting
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
+const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage'));
+const TasksPage = lazy(() => import('./pages/TasksPage'));
+const MaterialsPage = lazy(() => import('./pages/MaterialsPage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
+const BOQPage = lazy(() => import('./pages/BOQPage'));
+const ResourcesPage = lazy(() => import('./pages/ResourcesPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+
+// Loading fallback
+const PageLoader = () => (
+  <div className="flex items-center justify-center h-64">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+  </div>
+);
 
 function App() {
   return (
     <>
       <Toaster position="top-right" richColors expand={false} closeButton />
 
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        
-        <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="projects" element={<ProjectsPage />} />
-          <Route path="projects/:id" element={<ProjectDetailPage />} />
-          <Route path="tasks" element={<TasksPage />} />
-          <Route path="resources" element={<ResourcesPage />} />
-          <Route path="boq" element={<BOQPage />} />
-          <Route path="materials" element={<MaterialsPage />} />
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="analytics" element={<AnalyticsPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-        </Route>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
 
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+          <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="projects" element={<ProjectsPage />} />
+            <Route path="projects/:id" element={<ProjectDetailPage />} />
+            <Route path="tasks" element={<TasksPage />} />
+            <Route path="resources" element={<ResourcesPage />} />
+            <Route path="boq" element={<BOQPage />} />
+            <Route path="materials" element={<MaterialsPage />} />
+            <Route path="reports" element={<ReportsPage />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
+
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Suspense>
     </>
   );
 }

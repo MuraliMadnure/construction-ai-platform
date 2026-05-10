@@ -421,6 +421,12 @@ model Task {
   @@index([assignedTo])
   @@index([isCriticalPath])
   @@index([deletedAt])
+  // Compound indexes for common query patterns (performance)
+  @@index([projectId, status])
+  @@index([assignedTo, status])
+  @@index([projectId, deletedAt])
+  @@index([assignedTo, status, startDate, endDate])
+  @@index([taskType, status, assignedTo])
 }
 
 enum TaskPriority {
@@ -702,6 +708,8 @@ model DailyProgressReport {
   @@index([projectId])
   @@index([reportDate])
   @@index([reviewStatus])
+  @@index([taskId, reportDate])
+  @@index([projectId, reportDate])
 }
 
 enum ReviewStatus {
@@ -902,6 +910,7 @@ model TaskAlert {
   @@index([type])
   @@index([severity])
   @@index([createdAt])
+  @@index([taskId, dismissedAt])
 }
 
 enum AlertSeverity {

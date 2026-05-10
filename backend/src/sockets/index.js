@@ -1,5 +1,18 @@
 const logger = require('../utils/logger');
 const { verifyAccessToken } = require('../utils/jwt');
+const prisma = require('../utils/prisma');
+
+// Sanitize string input to prevent XSS
+const sanitizeInput = (str) => {
+  if (typeof str !== 'string') return '';
+  return str.replace(/[<>]/g, '').trim().slice(0, 5000);
+};
+
+// Validate UUID format
+const isValidId = (id) => {
+  if (typeof id !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+};
 
 /**
  * Initialize Socket.IO server
@@ -11,13 +24,14 @@ const initializeSocket = (io) => {
     try {
       const token = socket.handshake.auth.token;
 
-      if (!token) {
+      if (!token || typeof token !== 'string') {
         return next(new Error('Authentication error'));
       }
 
       const decoded = verifyAccessToken(token);
       socket.userId = decoded.userId;
       socket.userEmail = decoded.email;
+      socket.authorizedProjects = new Set();
 
       next();
     } catch (error) {
@@ -32,12 +46,30 @@ const initializeSocket = (io) => {
     // Join user's personal room
     socket.join(`user:${socket.userId}`);
 
-    // Handle project join
-    socket.on('project:join', (projectId) => {
+    // Handle project join - with membership verification
+    socket.on('project:join', async (projectId) => {
+      if (!isValidId(projectId)) return;
+
+      // Verify user is a member of this project or its creator
+      const [membership, isCreator] = await Promise.all([
+        prisma.projectMember.findFirst({
+          where: { projectId, userId: socket.userId }
+        }),
+        prisma.project.findFirst({
+          where: { id: projectId, createdBy: socket.userId },
+          select: { id: true }
+        })
+      ]);
+
+      if (!membership && !isCreator) {
+        socket.emit('error', { message: 'Not authorized to join this project' });
+        return;
+      }
+
+      socket.authorizedProjects.add(projectId);
       socket.join(`project:${projectId}`);
       logger.info(`User ${socket.userId} joined project ${projectId}`);
 
-      // Notify others in the project
       socket.to(`project:${projectId}`).emit('user:joined', {
         userId: socket.userId,
         email: socket.userEmail
@@ -46,6 +78,8 @@ const initializeSocket = (io) => {
 
     // Handle project leave
     socket.on('project:leave', (projectId) => {
+      if (!isValidId(projectId)) return;
+      socket.authorizedProjects.delete(projectId);
       socket.leave(`project:${projectId}`);
       logger.info(`User ${socket.userId} left project ${projectId}`);
 
@@ -56,21 +90,25 @@ const initializeSocket = (io) => {
 
     // Handle task updates
     socket.on('task:update', (data) => {
-      const { projectId, taskId, updates } = data;
+      if (!data || !isValidId(data.projectId) || !isValidId(data.taskId)) return;
+      if (!socket.authorizedProjects.has(data.projectId)) return;
 
-      // Broadcast to project members
-      io.to(`project:${projectId}`).emit('task:updated', {
-        taskId,
-        updates,
+      io.to(`project:${data.projectId}`).emit('task:updated', {
+        taskId: data.taskId,
+        updates: data.updates,
         updatedBy: socket.userId
       });
     });
 
-    // Handle chat messages
+    // Handle chat messages - with XSS sanitization
     socket.on('chat:message', (data) => {
-      const { projectId, message } = data;
+      if (!data || !isValidId(data.projectId)) return;
+      if (!socket.authorizedProjects.has(data.projectId)) return;
 
-      io.to(`project:${projectId}`).emit('chat:message', {
+      const message = sanitizeInput(data.message);
+      if (!message) return;
+
+      io.to(`project:${data.projectId}`).emit('chat:message', {
         message,
         userId: socket.userId,
         email: socket.userEmail,
@@ -80,9 +118,10 @@ const initializeSocket = (io) => {
 
     // Handle AI chat
     socket.on('ai:chat', async (data) => {
-      const { message, projectId } = data;
+      if (!data) return;
+      const message = sanitizeInput(data.message);
+      if (!message) return;
 
-      // TODO: Implement AI chat logic
       socket.emit('ai:response', {
         message: 'AI response would go here',
         timestamp: new Date().toISOString()
@@ -91,15 +130,17 @@ const initializeSocket = (io) => {
 
     // Handle typing indicators
     socket.on('typing:start', (data) => {
-      const { projectId } = data;
-      socket.to(`project:${projectId}`).emit('typing:start', {
+      if (!data || !isValidId(data.projectId)) return;
+      if (!socket.authorizedProjects.has(data.projectId)) return;
+      socket.to(`project:${data.projectId}`).emit('typing:start', {
         userId: socket.userId
       });
     });
 
     socket.on('typing:stop', (data) => {
-      const { projectId } = data;
-      socket.to(`project:${projectId}`).emit('typing:stop', {
+      if (!data || !isValidId(data.projectId)) return;
+      if (!socket.authorizedProjects.has(data.projectId)) return;
+      socket.to(`project:${data.projectId}`).emit('typing:stop', {
         userId: socket.userId
       });
     });

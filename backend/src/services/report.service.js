@@ -13,6 +13,31 @@ class ReportService {
     if (!fs.existsSync(this.reportsDir)) {
       fs.mkdirSync(this.reportsDir, { recursive: true });
     }
+    this._browser = null;
+    this._browserUseCount = 0;
+    this._maxBrowserUses = 20; // Recycle browser after 20 uses to prevent memory leaks
+  }
+
+  async getBrowser() {
+    if (!this._browser || !this._browser.isConnected() || this._browserUseCount >= this._maxBrowserUses) {
+      if (this._browser) {
+        try { await this._browser.close(); } catch (e) { /* ignore */ }
+      }
+      this._browser = await puppeteer.launch({
+        headless: 'new',
+        args: process.env.NODE_ENV === 'production' ? ['--disable-gpu', '--disable-dev-shm-usage'] : ['--no-sandbox', '--disable-gpu']
+      });
+      this._browserUseCount = 0;
+    }
+    this._browserUseCount++;
+    return this._browser;
+  }
+
+  async closeBrowser() {
+    if (this._browser) {
+      await this._browser.close();
+      this._browser = null;
+    }
   }
 
   /**
@@ -47,31 +72,29 @@ class ReportService {
       // Generate HTML content
       const html = this.getProjectReportHTML(project, stats);
 
-      // Generate PDF
-      const browser = await puppeteer.launch({
-        headless: 'new',
-        args: ['--no-sandbox']
-      });
-
+      // Generate PDF using pooled browser
+      const browser = await this.getBrowser();
       const page = await browser.newPage();
-      await page.setContent(html);
+      try {
+        await page.setContent(html);
 
-      const fileName = `project_report_${projectId}_${Date.now()}.pdf`;
-      const filePath = path.join(this.reportsDir, fileName);
+        const fileName = `project_report_${projectId}_${Date.now()}.pdf`;
+        const filePath = path.join(this.reportsDir, fileName);
 
-      await page.pdf({
-        path: filePath,
-        format: 'A4',
-        printBackground: true,
-        margin: {
-          top: '20mm',
-          right: '15mm',
-          bottom: '20mm',
-          left: '15mm'
-        }
-      });
-
-      await browser.close();
+        await page.pdf({
+          path: filePath,
+          format: 'A4',
+          printBackground: true,
+          margin: {
+            top: '20mm',
+            right: '15mm',
+            bottom: '20mm',
+            left: '15mm'
+          }
+        });
+      } finally {
+        await page.close();
+      }
 
       logger.info(`PDF report generated: ${fileName}`);
 
@@ -106,24 +129,22 @@ class ReportService {
 
       const html = this.getDailyReportHTML(report);
 
-      const browser = await puppeteer.launch({
-        headless: 'new',
-        args: ['--no-sandbox']
-      });
-
+      const browser = await this.getBrowser();
       const page = await browser.newPage();
-      await page.setContent(html);
+      try {
+        await page.setContent(html);
 
-      const fileName = `daily_report_${reportId}_${Date.now()}.pdf`;
-      const filePath = path.join(this.reportsDir, fileName);
+        const fileName = `daily_report_${reportId}_${Date.now()}.pdf`;
+        const filePath = path.join(this.reportsDir, fileName);
 
-      await page.pdf({
-        path: filePath,
-        format: 'A4',
-        printBackground: true
-      });
-
-      await browser.close();
+        await page.pdf({
+          path: filePath,
+          format: 'A4',
+          printBackground: true
+        });
+      } finally {
+        await page.close();
+      }
 
       logger.info(`Daily report PDF generated: ${fileName}`);
 

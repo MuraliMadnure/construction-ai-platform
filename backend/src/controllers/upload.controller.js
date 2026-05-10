@@ -136,7 +136,8 @@ exports.deleteFile = async (req, res, next) => {
     }
 
     // Check if user has permission to delete
-    if (file.uploadedBy !== req.user.id && req.user.role !== 'admin') {
+    const isAdmin = req.user.roles && req.user.roles.includes('admin');
+    if (file.uploadedBy !== req.user.id && !isAdmin) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to delete this file'
@@ -191,6 +192,27 @@ exports.getFile = async (req, res, next) => {
       });
     }
 
+    // Authorization: user must be uploader, admin, or project member
+    const isAdmin = req.user.roles && req.user.roles.includes('admin');
+    if (file.uploadedBy !== req.user.id && !isAdmin) {
+      if (file.projectId) {
+        const membership = await prisma.projectMember.findFirst({
+          where: { projectId: file.projectId, userId: req.user.id }
+        });
+        if (!membership) {
+          return res.status(403).json({
+            success: false,
+            message: 'You do not have access to this file'
+          });
+        }
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have access to this file'
+        });
+      }
+    }
+
     res.json({
       success: true,
       data: { file }
@@ -205,6 +227,20 @@ exports.getFile = async (req, res, next) => {
 exports.getProjectFiles = async (req, res, next) => {
   try {
     const { projectId } = req.params;
+
+    // Authorization: user must be admin or project member
+    const isAdmin = req.user.roles && req.user.roles.includes('admin');
+    if (!isAdmin) {
+      const membership = await prisma.projectMember.findFirst({
+        where: { projectId, userId: req.user.id }
+      });
+      if (!membership) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have access to this project\'s files'
+        });
+      }
+    }
 
     const files = await prisma.fileUpload.findMany({
       where: { projectId },

@@ -270,6 +270,10 @@ exports.forgotPassword = async (req, res, next) => {
   try {
     const { email } = req.body;
 
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
     const user = await prisma.user.findUnique({
       where: { email }
     });
@@ -282,20 +286,36 @@ exports.forgotPassword = async (req, res, next) => {
       });
     }
 
-    // Generate reset token
+    // Generate reset token using separate reset secret
+    const crypto = require('crypto');
+    const resetId = crypto.randomBytes(16).toString('hex');
     const resetToken = jwt.sign(
-      { userId: user.id },
-      config.jwt.secret,
-      { expiresIn: '1h' }
+      { userId: user.id, resetId },
+      config.jwt.resetSecret || config.jwt.secret + '_reset',
+      { expiresIn: '1h', algorithm: config.jwt.algorithm || 'HS256' }
     );
 
-    // TODO: Save reset token to database (requires schema update)
-    // TODO: Send email with reset link
+    // Invalidate any existing reset tokens for this user
+    await prisma.refreshToken.deleteMany({
+      where: { userId: user.id, token: { startsWith: 'reset_' } }
+    });
+
+    // Store reset token in database for single-use validation
+    await prisma.refreshToken.create({
+      data: {
+        token: `reset_${resetId}`,
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+      }
+    });
+
     logger.info(`Password reset requested for: ${email}`);
+
+    // TODO: Send email with reset link containing resetToken
 
     res.json({
       success: true,
-      message: 'Password reset email sent'
+      message: 'If the email exists, a password reset link will be sent'
     });
   } catch (error) {
     logger.error('Forgot password error:', error);
@@ -308,8 +328,34 @@ exports.resetPassword = async (req, res, next) => {
   try {
     const { token, password } = req.body;
 
-    // Verify token
-    const decoded = jwt.verify(token, config.jwt.secret);
+    if (!token || !password) {
+      return res.status(400).json({ success: false, message: 'Token and password are required' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
+    }
+
+    // Verify token using separate reset secret
+    const decoded = jwt.verify(token, config.jwt.resetSecret || config.jwt.secret + '_reset', {
+      algorithms: [config.jwt.algorithm || 'HS256']
+    });
+
+    // Validate token exists in database (single-use)
+    const storedToken = await prisma.refreshToken.findFirst({
+      where: {
+        token: `reset_${decoded.resetId}`,
+        userId: decoded.userId,
+        expiresAt: { gt: new Date() }
+      }
+    });
+
+    if (!storedToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset token'
+      });
+    }
 
     // Find user
     const user = await prisma.user.findUnique({
@@ -319,26 +365,29 @@ exports.resetPassword = async (req, res, next) => {
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: 'User not found'
+        message: 'Invalid reset token'
       });
     }
 
     // Hash new password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Update password
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash: hashedPassword
-      }
-    });
+    // Update password and invalidate reset token (single-use)
+    await Promise.all([
+      prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: hashedPassword }
+      }),
+      prisma.refreshToken.delete({ where: { id: storedToken.id } }),
+      // Invalidate all existing refresh tokens (force re-login)
+      prisma.refreshToken.deleteMany({ where: { userId: user.id } })
+    ]);
 
     logger.info(`Password reset successful for user: ${user.email}`);
 
     res.json({
       success: true,
-      message: 'Password reset successful'
+      message: 'Password reset successful. Please log in with your new password.'
     });
   } catch (error) {
     logger.error('Reset password error:', error);

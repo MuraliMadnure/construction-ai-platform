@@ -1,6 +1,7 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { ApiError } = require('./error.middleware');
 const config = require('../config');
 
@@ -16,10 +17,11 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
-    cb(null, `${name}-${uniqueSuffix}${ext}`);
+    const uniqueSuffix = crypto.randomBytes(16).toString('hex');
+    const ext = path.extname(file.originalname).toLowerCase();
+    // Sanitize: only allow alphanumeric extensions
+    const safeExt = /^\.[a-z0-9]+$/.test(ext) ? ext : '';
+    cb(null, `${uniqueSuffix}${safeExt}`);
   }
 });
 

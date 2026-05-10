@@ -2,6 +2,7 @@ const prisma = require('../utils/prisma');
 const logger = require('../utils/logger');
 const notificationService = require('./notification.service');
 const aiService = require('./ai.service');
+const { cacheGet, cacheInvalidate } = require('../utils/cache');
 
 class TaskManagementService {
 
@@ -379,47 +380,50 @@ class TaskManagementService {
 
   async suggestAssignees(taskId) {
     try {
-      const task = await prisma.task.findUnique({
-        where: { id: taskId },
-        include: { project: true }
-      });
+      // Cache suggestions for 15 minutes
+      return await cacheGet(`task:suggestions:${taskId}`, async () => {
+        const task = await prisma.task.findUnique({
+          where: { id: taskId },
+          include: { project: true }
+        });
 
-      // Get project team members
-      const teamMembers = await prisma.projectMember.findMany({
-        where: {
-          projectId: task.projectId,
-          leftAt: null
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-              status: true
+        // Get project team members
+        const teamMembers = await prisma.projectMember.findMany({
+          where: {
+            projectId: task.projectId,
+            leftAt: null
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                status: true
+              }
             }
           }
-        }
-      });
+        });
 
-      // Score each team member
-      const scoredMembers = await Promise.all(
-        teamMembers.map(async (member) => {
-          const score = await this.calculateAssignmentScore(member.user, task);
-          return {
-            user: member.user,
-            role: member.role,
-            score,
-            recommendation: this.getRecommendationReason(score)
-          };
-        })
-      );
+        // Score each team member
+        const scoredMembers = await Promise.all(
+          teamMembers.map(async (member) => {
+            const score = await this.calculateAssignmentScore(member.user, task);
+            return {
+              user: member.user,
+              role: member.role,
+              score,
+              recommendation: this.getRecommendationReason(score)
+            };
+          })
+        );
 
-      // Sort by score (descending)
-      scoredMembers.sort((a, b) => b.score - a.score);
+        // Sort by score (descending)
+        scoredMembers.sort((a, b) => b.score - a.score);
 
-      return scoredMembers;
+        return scoredMembers;
+      }, 900); // 15 min TTL
     } catch (error) {
       logger.error('Error suggesting assignees:', error);
       throw error;
@@ -430,32 +434,44 @@ class TaskManagementService {
     let score = 0;
 
     try {
+      // Batch all queries in parallel to avoid N+1
+      const [currentTasks, completedTasks, similarTasks] = await Promise.all([
+        // Factor 1: Workload
+        prisma.task.count({
+          where: {
+            assignedTo: user.id,
+            status: { in: ['IN_PROGRESS', 'ASSIGNED', 'READY_TO_START'] }
+          }
+        }),
+        // Factor 2: Past performance
+        prisma.task.count({
+          where: {
+            assignedTo: user.id,
+            status: 'COMPLETED',
+            projectId: task.projectId
+          }
+        }),
+        // Factor 5: Similar task experience
+        prisma.task.count({
+          where: {
+            assignedTo: user.id,
+            taskType: task.taskType,
+            status: 'COMPLETED'
+          }
+        })
+      ]);
+
       // Factor 1: Workload (0-30 points)
-      const currentTasks = await prisma.task.count({
-        where: {
-          assignedTo: user.id,
-          status: { in: ['IN_PROGRESS', 'ASSIGNED', 'READY_TO_START'] }
-        }
-      });
-      const workloadScore = Math.max(0, 30 - (currentTasks * 5));
-      score += workloadScore;
+      score += Math.max(0, 30 - (currentTasks * 5));
 
       // Factor 2: Past performance (0-25 points)
-      const completedTasks = await prisma.task.count({
-        where: {
-          assignedTo: user.id,
-          status: 'COMPLETED',
-          projectId: task.projectId
-        }
-      });
       score += Math.min(25, completedTasks * 5);
 
-      // Factor 3: Availability (0-20 points)
-      const availability = await this.checkUserAvailability(user.id, task.startDate, task.endDate);
-      if (availability.available) {
+      // Factor 3: Availability (0-20 points) - uses currentTasks count directly
+      if (currentTasks < 5) {
         score += 20;
       } else {
-        score += Math.max(0, 20 - (availability.currentTaskCount * 5));
+        score += Math.max(0, 20 - (currentTasks * 5));
       }
 
       // Factor 4: User status (0-15 points)
@@ -464,19 +480,12 @@ class TaskManagementService {
       }
 
       // Factor 5: Similar task experience (0-10 points)
-      const similarTasks = await prisma.task.count({
-        where: {
-          assignedTo: user.id,
-          taskType: task.taskType,
-          status: 'COMPLETED'
-        }
-      });
       score += Math.min(10, similarTasks * 2);
 
       return Math.min(100, Math.max(0, score));
     } catch (error) {
       logger.error('Error calculating assignment score:', error);
-      return 50; // Default score
+      return 50;
     }
   }
 
@@ -723,27 +732,26 @@ class TaskManagementService {
 
   async linkMaterials(taskId, materials) {
     try {
-      const taskMaterials = await Promise.all(
-        materials.map(async (material) => {
-          return await prisma.taskMaterial.create({
-            data: {
-              taskId,
-              materialId: material.materialId,
-              materialName: material.materialName,
-              category: material.category,
-              estimatedQuantity: material.estimatedQuantity,
-              unit: material.unit,
-              estimatedUnitRate: material.estimatedUnitRate,
-              estimatedTotal: material.estimatedQuantity * material.estimatedUnitRate,
-              requiredByDate: material.requiredByDate,
-              inventoryAvailable: material.inventoryAvailable || false
-            }
-          });
-        })
-      );
+      // Use batch insert for performance
+      await prisma.taskMaterial.createMany({
+        data: materials.map((material) => ({
+          taskId,
+          materialId: material.materialId,
+          materialName: material.materialName,
+          category: material.category,
+          estimatedQuantity: material.estimatedQuantity,
+          unit: material.unit,
+          estimatedUnitRate: material.estimatedUnitRate,
+          estimatedTotal: material.estimatedQuantity * material.estimatedUnitRate,
+          requiredByDate: material.requiredByDate,
+          inventoryAvailable: material.inventoryAvailable || false
+        }))
+      });
 
       logger.info(`${materials.length} materials linked to task ${taskId}`);
-      return taskMaterials;
+
+      // Return created records
+      return prisma.taskMaterial.findMany({ where: { taskId } });
     } catch (error) {
       logger.error('Error linking materials:', error);
       throw error;
