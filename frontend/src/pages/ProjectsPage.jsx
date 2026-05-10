@@ -243,22 +243,35 @@ const ProjectsPage = () => {
         <div className="card">
           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Projects</h3>
           <p className="text-3xl font-bold mt-2">{projects.length}</p>
-          <p className="text-sm text-green-600 dark:text-green-400 mt-1">+2 this month</p>
+          <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+            {projects.filter(p => p.status?.toUpperCase() === 'PLANNING').length} planning
+          </p>
         </div>
         <div className="card">
           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Active Projects</h3>
-          <p className="text-3xl font-bold mt-2">{projects.filter(p => p.status === 'active').length}</p>
+          <p className="text-3xl font-bold mt-2 text-green-600">
+            {projects.filter(p => p.status?.toUpperCase() === 'ACTIVE').length}
+          </p>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">In progress</p>
         </div>
         <div className="card">
           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Budget</h3>
-          <p className="text-3xl font-bold mt-2">₹721.2M</p>
+          <p className="text-3xl font-bold mt-2">
+            ₹{(projects.reduce((sum, p) => sum + parseFloat(p.budget || 0), 0) / 100000).toFixed(1)}L
+          </p>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Across all projects</p>
         </div>
         <div className="card">
-          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Completion Rate</h3>
-          <p className="text-3xl font-bold mt-2">56%</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Average progress</p>
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Avg. Progress</h3>
+          <p className="text-3xl font-bold mt-2">
+            {projects.length > 0 ? Math.round(projects.reduce((sum, p) => sum + parseFloat(p.progress || 0), 0) / projects.length) : 0}%
+          </p>
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-2">
+            <div
+              className="bg-primary-600 h-1.5 rounded-full"
+              style={{ width: `${projects.length > 0 ? projects.reduce((sum, p) => sum + parseFloat(p.progress || 0), 0) / projects.length : 0}%` }}
+            ></div>
+          </div>
         </div>
       </div>
 
@@ -296,89 +309,113 @@ const ProjectsPage = () => {
       </div>
 
       {/* Projects Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {filteredProjects.map(project => (
-          <div key={project.id} className="card hover:shadow-lg transition-shadow cursor-pointer">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-lg font-semibold mb-1">{project.name}</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {project.location || 'Location not set'}
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        {filteredProjects.map(project => {
+          const progress = parseFloat(project.progress || 0);
+          const isOverdue = project.endDate && new Date(project.endDate) < new Date() && progress < 100;
+          return (
+            <div key={project.id} className="card hover:shadow-lg transition-all hover:-translate-y-0.5 group">
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-lg font-semibold truncate">{project.name}</h3>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className="truncate">{project.location || 'Location not set'}</span>
+                  </div>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(project.status)}`}>
+                  {getStatusLabel(project.status)}
+                </span>
+              </div>
+
+              {project.description && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                  {project.description}
                 </p>
+              )}
+
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-600 dark:text-gray-400">Progress</span>
+                    <span className={`font-semibold ${isOverdue ? 'text-red-600' : ''}`}>
+                      {progress.toFixed(0)}%
+                      {isOverdue && <span className="text-xs ml-1">⚠ Overdue</span>}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all ${isOverdue ? 'bg-red-500' : 'bg-primary-600'}`}
+                      style={{ width: `${Math.min(progress, 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Budget</p>
+                    <p className="font-semibold text-sm">₹{(parseFloat(project.budget || 0) / 100000).toFixed(1)}L</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Timeline</p>
+                    <p className="text-sm">
+                      {project.startDate ? new Date(project.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '-'}
+                      {' → '}
+                      {project.endDate ? new Date(project.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }) : '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Tasks</p>
+                    <p className="text-sm font-medium">{project._count?.tasks || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Team</p>
+                    <p className="text-sm font-medium">{project._count?.members || 0} members</p>
+                  </div>
+                </div>
               </div>
-              <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
-                {getStatusLabel(project.status)}
-              </span>
-            </div>
 
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-              {project.description || 'No description'}
-            </p>
-
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600 dark:text-gray-400">Progress</span>
-                  <span className="font-semibold">{parseFloat(project.progress || 0).toFixed(0)}%</span>
-                </div>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div
-                    className="bg-primary-600 h-2 rounded-full transition-all"
-                    style={{ width: `${parseFloat(project.progress || 0)}%` }}
-                  ></div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 pt-3 border-t border-gray-200 dark:border-gray-700">
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Budget</p>
-                  <p className="font-semibold">₹{parseFloat(project.budget || 0).toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Start Date</p>
-                  <p className="text-sm">{new Date(project.startDate).toLocaleDateString()}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">End Date</p>
-                  <p className="text-sm">{new Date(project.endDate).toLocaleDateString()}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Members</p>
-                  <p className="text-sm">{project._count?.members || 0}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              {project.id ? (
-                <Link to={`/projects/${project.id}`} className="btn-ghost flex-1 text-center">
-                  View Details
+              <div className="flex gap-2 mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
+                <Link to={`/projects/${project.id}`} className="btn-primary flex-1 text-center text-sm py-2">
+                  Open
                 </Link>
-              ) : (
-                <button disabled className="btn-ghost flex-1 text-center opacity-50 cursor-not-allowed">
-                  Invalid Project
-                </button>
-              )}
-              <button className="btn-ghost" onClick={() => openEditModal(project)}>Edit</button>
-              {project.status?.toLowerCase() !== 'completed' && project.status?.toLowerCase() !== 'cancelled' && (
-                <button
-                  className="btn-ghost text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                  onClick={() => {
-                    setProjectToClose(project);
-                    setShowCloseModal(true);
-                  }}
-                >
-                  Close
-                </button>
-              )}
+                <button className="btn-ghost text-sm py-2" onClick={() => openEditModal(project)}>Edit</button>
+                {project.status?.toUpperCase() !== 'COMPLETED' && project.status?.toUpperCase() !== 'CANCELLED' && (
+                  <button
+                    className="btn-ghost text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm py-2"
+                    onClick={() => {
+                      setProjectToClose(project);
+                      setShowCloseModal(true);
+                    }}
+                  >
+                    Close
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {filteredProjects.length === 0 && (
-        <div className="card text-center py-12">
-          <p className="text-gray-500 dark:text-gray-400">No projects found matching your criteria</p>
+        <div className="card text-center py-16">
+          <svg className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+          <p className="text-gray-500 dark:text-gray-400 text-lg font-medium">No projects found</p>
+          <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">
+            {searchQuery || statusFilter !== 'all' ? 'Try adjusting your filters' : 'Create your first project to get started'}
+          </p>
+          {!searchQuery && statusFilter === 'all' && (
+            <button className="btn-primary mt-4" onClick={() => setShowCreateModal(true)}>
+              + Create Project
+            </button>
+          )}
         </div>
       )}
 
