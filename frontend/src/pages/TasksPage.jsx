@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
-import { LayoutGrid, Calendar, CheckSquare, FileText, FolderTree, BarChart3 } from 'lucide-react';
+import {
+  LayoutGrid, Calendar, CheckSquare, FileText, FolderTree, BarChart3,
+  List, ListTodo, Clock, CheckCircle2, AlertCircle, Users, Zap
+} from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import TaskBoard from '../components/TaskManagement/TaskBoard';
 import TaskDetailDrawer from '../components/TaskManagement/TaskDetailDrawer';
@@ -8,6 +11,7 @@ import DailyProgressForm from '../components/TaskManagement/DailyProgressForm';
 import GanttChart from '../components/TaskManagement/GanttChart';
 import PhaseManagement from '../components/TaskManagement/PhaseManagement';
 import ProgressAnalytics from '../components/TaskManagement/ProgressAnalytics';
+import ListView from '../components/TaskManagement/ListView';
 import useTaskStore from '../stores/taskStore';
 import useSocket from '../hooks/useSocket';
 
@@ -44,11 +48,21 @@ const TasksPage = () => {
 
   const tabs = [
     { id: 'board', label: 'Board', icon: LayoutGrid },
+    { id: 'list', label: 'List View', icon: List },
     { id: 'gantt', label: 'Timeline', icon: Calendar },
     { id: 'phases', label: 'Phases', icon: FolderTree },
     { id: 'approvals', label: 'Approvals', icon: CheckSquare },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 }
   ];
+
+  // Calculate stats
+  const stats = {
+    total: tasks.length,
+    completed: tasks.filter(t => t.status === 'COMPLETED').length,
+    inProgress: tasks.filter(t => t.status === 'IN_PROGRESS').length,
+    blockedOrAtRisk: tasks.filter(t => t.status === 'BLOCKED' || t.riskLevel === 'HIGH' || t.riskLevel === 'CRITICAL').length,
+    completionRate: tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'COMPLETED').length / tasks.length) * 100) : 0
+  };
 
   const openProgressForm = (taskId) => {
     setSelectedTaskForProgress(taskId);
@@ -61,14 +75,15 @@ const TasksPage = () => {
   };
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header with Tabs */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold text-gray-900">Task Management</h1>
-
-          {/* Quick Actions */}
-          <div className="flex items-center gap-3">
+    <div className="h-full flex flex-col bg-gray-50">
+      {/* Premium Header */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-lg">
+        <div className="px-8 py-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Task Management</h1>
+              <p className="text-slate-300 text-sm mt-1">Manage and track project deliverables</p>
+            </div>
             <button
               onClick={() => {
                 const taskId = tasks[0]?.id;
@@ -78,53 +93,118 @@ const TasksPage = () => {
                   alert('No tasks available. Please create a task first.');
                 }
               }}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2"
             >
+              <CheckCircle2 className="w-4 h-4" />
               Submit Daily Report
             </button>
           </div>
+
+          {/* Stats Bar */}
+          <div className="grid grid-cols-5 gap-4">
+            <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-4 border border-white border-opacity-20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-slate-300 text-xs font-medium tracking-wide">TOTAL TASKS</p>
+                  <p className="text-3xl font-bold mt-1">{stats.total}</p>
+                </div>
+                <ListTodo className="w-8 h-8 text-slate-400" />
+              </div>
+            </div>
+
+            <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-4 border border-white border-opacity-20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-slate-300 text-xs font-medium tracking-wide">IN PROGRESS</p>
+                  <p className="text-3xl font-bold mt-1">{stats.inProgress}</p>
+                </div>
+                <Zap className="w-8 h-8 text-amber-400" />
+              </div>
+            </div>
+
+            <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-4 border border-white border-opacity-20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-slate-300 text-xs font-medium tracking-wide">COMPLETED</p>
+                  <p className="text-3xl font-bold mt-1">{stats.completed}</p>
+                </div>
+                <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+              </div>
+            </div>
+
+            <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-4 border border-white border-opacity-20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-slate-300 text-xs font-medium tracking-wide">AT RISK</p>
+                  <p className="text-3xl font-bold mt-1">{stats.blockedOrAtRisk}</p>
+                </div>
+                <AlertCircle className="w-8 h-8 text-red-400" />
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg p-4 border border-blue-400 border-opacity-30">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-slate-100 text-xs font-medium tracking-wide">COMPLETION</p>
+                  <p className="text-3xl font-bold mt-1">{stats.completionRate}%</p>
+                </div>
+                <div className="w-12 h-12 rounded-full border-4 border-white border-opacity-30 flex items-center justify-center">
+                  <span className="text-lg font-semibold">{stats.completionRate}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-gray-200 overflow-x-auto">
+        {/* Modern Tab Navigation */}
+        <div className="flex border-t border-slate-700 overflow-x-auto">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-6 py-3 border-b-2 transition-colors whitespace-nowrap ${
+              className={`flex items-center gap-2 px-6 py-4 font-medium transition-all whitespace-nowrap relative group ${
                 activeTab === tab.id
-                  ? 'border-blue-600 text-blue-600 font-medium'
-                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                  ? 'text-white bg-slate-700 bg-opacity-50'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700 hover:bg-opacity-30'
               }`}
             >
               <tab.icon className="w-5 h-5" />
               <span>{tab.label}</span>
+              {activeTab === tab.id && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-400 to-cyan-400"></div>
+              )}
             </button>
           ))}
         </div>
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-hidden">
-        {activeTab === 'board' && (
-          <TaskBoard projectId={currentProjectId} socket={socket} />
-        )}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-auto px-8 py-6">
+          {activeTab === 'board' && (
+            <TaskBoard projectId={currentProjectId} socket={socket} />
+          )}
 
-        {activeTab === 'gantt' && (
-          <GanttChart projectId={currentProjectId} socket={socket} />
-        )}
+          {activeTab === 'list' && (
+            <ListView projectId={currentProjectId} socket={socket} />
+          )}
 
-        {activeTab === 'phases' && (
-          <PhaseManagement projectId={currentProjectId} />
-        )}
+          {activeTab === 'gantt' && (
+            <GanttChart projectId={currentProjectId} socket={socket} />
+          )}
 
-        {activeTab === 'approvals' && (
-          <ApprovalDashboard />
-        )}
+          {activeTab === 'phases' && (
+            <PhaseManagement projectId={currentProjectId} />
+          )}
 
-        {activeTab === 'analytics' && (
-          <ProgressAnalytics projectId={currentProjectId} />
-        )}
+          {activeTab === 'approvals' && (
+            <ApprovalDashboard />
+          )}
+
+          {activeTab === 'analytics' && (
+            <ProgressAnalytics projectId={currentProjectId} />
+          )}
+        </div>
       </div>
 
       {/* Task Detail Drawer (Global) */}
