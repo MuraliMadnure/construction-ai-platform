@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { format, differenceInDays, addDays, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -28,8 +28,8 @@ const GanttChart = ({ projectId, socket }) => {
     }
   }, [projectId]);
 
-  // Calculate date range
-  const getDateRange = () => {
+  // Calculate date range (memoized)
+  const { rangeStart, rangeEnd, totalDays, days } = useMemo(() => {
     let start = new Date(currentDate);
     let end = new Date(currentDate);
 
@@ -44,7 +44,6 @@ const GanttChart = ({ projectId, socket }) => {
       end = endOfMonth(addDays(end, 120));
     }
 
-    // Ensure we cover all task dates
     tasks.forEach(task => {
       if (task.startDate) {
         const taskStart = new Date(task.startDate);
@@ -56,12 +55,13 @@ const GanttChart = ({ projectId, socket }) => {
       }
     });
 
-    return { start, end };
-  };
-
-  const { start: rangeStart, end: rangeEnd } = getDateRange();
-  const totalDays = differenceInDays(rangeEnd, rangeStart);
-  const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
+    return {
+      rangeStart: start,
+      rangeEnd: end,
+      totalDays: differenceInDays(end, start),
+      days: eachDayOfInterval({ start, end })
+    };
+  }, [currentDate, viewMode, tasks]);
 
   // Calculate task position on timeline
   const getTaskPosition = (task) => {
@@ -524,4 +524,4 @@ const GanttChart = ({ projectId, socket }) => {
   );
 };
 
-export default GanttChart;
+export default memo(GanttChart);

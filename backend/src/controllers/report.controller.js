@@ -1,9 +1,8 @@
 const reportService = require('../services/report.service');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../utils/prisma');
 const logger = require('../utils/logger');
 const path = require('path');
 
-const prisma = new PrismaClient();
 
 /**
  * Generate project PDF report

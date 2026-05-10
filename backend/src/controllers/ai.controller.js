@@ -1,8 +1,7 @@
 const aiService = require('../services/ai.service');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../utils/prisma');
 const logger = require('../utils/logger');
 
-const prisma = new PrismaClient();
 
 /**
  * Get AI delay prediction for project

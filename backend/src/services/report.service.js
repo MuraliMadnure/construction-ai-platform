@@ -1,11 +1,10 @@
 const puppeteer = require('puppeteer');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../utils/prisma');
 const path = require('path');
 const fs = require('fs');
 const logger = require('../utils/logger');
 const ExcelJS = require('exceljs');
 
-const prisma = new PrismaClient();
 
 class ReportService {
   constructor() {

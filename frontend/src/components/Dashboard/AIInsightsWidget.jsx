@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, BrainCircuit, CheckCircle2, RefreshCw, TrendingUp } from 'lucide-react';
 import aiService from '../../services/ai.service';
 
@@ -156,4 +156,4 @@ const AIInsightsWidget = ({ projectId }) => {
   );
 };
 
-export default AIInsightsWidget;
+export default memo(AIInsightsWidget);

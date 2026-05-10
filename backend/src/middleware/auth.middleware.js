@@ -1,8 +1,7 @@
 const { verifyAccessToken } = require('../utils/jwt');
 const { ApiError } = require('./error.middleware');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../utils/prisma');
 
-const prisma = new PrismaClient();
 
 /**
  * Authenticate user middleware

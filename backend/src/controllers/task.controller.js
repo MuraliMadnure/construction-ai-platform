@@ -1,14 +1,14 @@
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../utils/prisma');
 const logger = require('../utils/logger');
 
-const prisma = new PrismaClient();
 
 // Get all tasks
 exports.getAllTasks = async (req, res, next) => {
   try {
-    const { projectId, status, priority } = req.query;
+    const { projectId, status, priority, page = 1, limit = 50 } = req.query;
 
     const where = {};
+    const skip = (page - 1) * limit;
 
     if (projectId) {
       where.projectId = projectId;
@@ -22,42 +22,45 @@ exports.getAllTasks = async (req, res, next) => {
       where.priority = priority;
     }
 
-    const tasks = await prisma.task.findMany({
-      where,
-      include: {
-        project: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        creator: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true
-          }
-        },
-        assignments: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true
+    const [tasks, total] = await Promise.all([
+      prisma.task.findMany({
+        where,
+        skip: parseInt(skip),
+        take: parseInt(limit),
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          priority: true,
+          startDate: true,
+          endDate: true,
+          progress: true,
+          createdAt: true,
+          project: {
+            select: { id: true, name: true }
+          },
+          creator: {
+            select: { id: true, firstName: true, lastName: true }
+          },
+          assignments: {
+            select: {
+              user: {
+                select: { id: true, firstName: true, lastName: true }
               }
             }
           }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+        },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.task.count({ where })
+    ]);
 
     res.json({
       success: true,
-      data: { tasks }
+      data: {
+        tasks,
+        meta: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) }
+      }
     });
   } catch (error) {
     logger.error('Get all tasks error:', error);

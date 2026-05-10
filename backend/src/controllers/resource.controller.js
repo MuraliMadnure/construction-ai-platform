@@ -1,7 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../utils/prisma');
 const logger = require('../utils/logger');
 
-const prisma = new PrismaClient();
 
 // Get all workers
 exports.getAllWorkers = async (req, res, next) => {

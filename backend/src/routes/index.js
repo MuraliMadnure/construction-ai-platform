@@ -5,11 +5,9 @@ const taskRoutes = require('./v1/task.routes');
 const resourceRoutes = require('./v1/resource.routes');
 const boqRoutes = require('./v1/boq.routes');
 const materialRoutes = require('./v1/material.routes');
-const purchaseRoutes = require('./v1/purchase.routes');
 const reportRoutes = require('./v1/report.routes');
 const aiRoutes = require('./v1/ai.routes');
 const notificationRoutes = require('./v1/notification.routes');
-const userRoutes = require('./v1/user.routes');
 
 // Enterprise Task Management Routes
 const taskEnterpriseRoutes = require('./v1/task-enterprise.routes');
@@ -34,11 +32,9 @@ router.use('/tasks', taskRoutes);
 router.use('/resources', resourceRoutes);
 router.use('/boq', boqRoutes);
 router.use('/materials', materialRoutes);
-router.use('/purchases', purchaseRoutes);
 router.use('/reports', reportRoutes);
 router.use('/ai', aiRoutes);
 router.use('/notifications', notificationRoutes);
-router.use('/users', userRoutes);
 
 // Enterprise Task Management
 router.use('/enterprise', taskEnterpriseRoutes);

@@ -1,8 +1,7 @@
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../utils/prisma');
 const logger = require('../utils/logger');
 const { cacheGet } = require('../utils/cache');
 
-const prisma = new PrismaClient();
 
 // Get all projects
 exports.getAllProjects = async (req, res, next) => {
@@ -73,22 +72,20 @@ exports.getAllProjects = async (req, res, next) => {
   }
 };
 
-// Helper: check if user has access to project
+// Helper: check if user has access to project (single query)
 const checkProjectAccess = async (projectId, userId, roles) => {
-  const isAdmin = roles && roles.includes('admin');
-  if (isAdmin) return { allowed: true };
+  if (roles && roles.includes('admin')) return { allowed: true };
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { createdBy: true }
+    select: {
+      createdBy: true,
+      members: { where: { userId }, select: { id: true }, take: 1 }
+    }
   });
   if (!project) return { allowed: false, notFound: true };
-  if (project.createdBy === userId) return { allowed: true };
-
-  const membership = await prisma.projectMember.findFirst({
-    where: { projectId, userId }
-  });
-  return { allowed: !!membership };
+  if (project.createdBy === userId || project.members.length > 0) return { allowed: true };
+  return { allowed: false };
 };
 
 // Get project by ID

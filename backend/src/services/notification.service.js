@@ -1,9 +1,8 @@
 const nodemailer = require('nodemailer');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../utils/prisma');
 const config = require('../config');
 const logger = require('../utils/logger');
 
-const prisma = new PrismaClient();
 
 class NotificationService {
   constructor() {

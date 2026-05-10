@@ -1,9 +1,8 @@
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../utils/prisma');
 const path = require('path');
 const fs = require('fs');
 const logger = require('../utils/logger');
 
-const prisma = new PrismaClient();
 
 // Upload single file
 exports.uploadFile = async (req, res, next) => {
