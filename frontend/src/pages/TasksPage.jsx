@@ -12,6 +12,7 @@ import GanttChart from '../components/TaskManagement/GanttChart';
 import PhaseManagement from '../components/TaskManagement/PhaseManagement';
 import ProgressAnalytics from '../components/TaskManagement/ProgressAnalytics';
 import ListView from '../components/TaskManagement/ListView';
+import projectService from '../services/project.service';
 import useTaskStore from '../stores/taskStore';
 import useSocket from '../hooks/useSocket';
 
@@ -22,6 +23,8 @@ import useSocket from '../hooks/useSocket';
 const TasksPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [currentProjectId, setCurrentProjectId] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
   const [showProgressForm, setShowProgressForm] = useState(false);
   const [selectedTaskForProgress, setSelectedTaskForProgress] = useState(null);
 
@@ -32,13 +35,46 @@ const TasksPage = () => {
 
   const { tasks } = useTaskStore();
 
-  // Get project ID from URL or localStorage
+  // Load projects and restore selected project from storage
   useEffect(() => {
     const projectIdFromStorage = localStorage.getItem('selectedProjectId');
     if (projectIdFromStorage) {
       setCurrentProjectId(projectIdFromStorage);
     }
+
+    const loadProjects = async () => {
+      setProjectsLoading(true);
+      try {
+        const response = await projectService.getAll({ limit: 100 });
+        const projectList = response.data?.projects || [];
+        setProjects(projectList);
+
+        const storedId = localStorage.getItem('selectedProjectId');
+        const validStoredId = storedId && projectList.some((project) => project.id === storedId);
+        const initialProjectId = validStoredId ? storedId : projectList[0]?.id || null;
+
+        if (initialProjectId) {
+          setCurrentProjectId(initialProjectId);
+          localStorage.setItem('selectedProjectId', initialProjectId);
+        } else {
+          setCurrentProjectId(null);
+          localStorage.removeItem('selectedProjectId');
+        }
+      } catch (error) {
+        console.error('Failed to load projects', error);
+      } finally {
+        setProjectsLoading(false);
+      }
+    };
+
+    loadProjects();
   }, []);
+
+  useEffect(() => {
+    if (currentProjectId) {
+      localStorage.setItem('selectedProjectId', currentProjectId);
+    }
+  }, [currentProjectId]);
 
   const setActiveTab = (tab) => {
     const params = new URLSearchParams(searchParams);
@@ -83,6 +119,30 @@ const TasksPage = () => {
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Task Management</h1>
               <p className="text-slate-300 text-sm mt-1">Manage and track project deliverables</p>
+              <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:gap-3">
+                <label className="text-sm text-slate-300 font-medium">Project</label>
+                <div>
+                  <select
+                    value={currentProjectId || ''}
+                    onChange={(e) => setCurrentProjectId(e.target.value)}
+                    disabled={projectsLoading || projects.length === 0}
+                    className="mt-2 sm:mt-0 w-full sm:w-72 px-3 py-2 rounded-lg border border-slate-700 bg-slate-900 text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                  >
+                    {projectsLoading ? (
+                      <option>Loading projects...</option>
+                    ) : projects.length === 0 ? (
+                      <option value="">No projects available</option>
+                    ) : (
+                      [
+                        <option key="placeholder" value="">Select a project</option>,
+                        ...projects.map((project) => (
+                          <option key={project.id} value={project.id}>{project.name}</option>
+                        ))
+                      ]
+                    )}
+                  </select>
+                </div>
+              </div>
             </div>
             <button
               onClick={() => {
@@ -208,7 +268,7 @@ const TasksPage = () => {
       </div>
 
       {/* Task Detail Drawer (Global) */}
-      <TaskDetailDrawer projectId={currentProjectId} />
+      <TaskDetailDrawer projectId={currentProjectId} projectOptions={projects} />
 
       {/* Daily Progress Form Modal */}
       {showProgressForm && selectedTaskForProgress && (

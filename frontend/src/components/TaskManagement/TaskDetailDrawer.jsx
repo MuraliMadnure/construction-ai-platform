@@ -11,7 +11,7 @@ import projectService from '../../services/project.service';
  * Full-featured task details sidebar with tabs for info, comments, checklist,
  * materials, dependencies, and progress reports
  */
-const TaskDetailDrawer = ({ projectId }) => {
+const TaskDetailDrawer = ({ projectId, projectOptions = [] }) => {
   const { selectedTask, isTaskDrawerOpen, closeTaskDrawer, updateTask, createTask } = useTaskStore();
   const [activeTab, setActiveTab] = useState('details');
   const [comments, setComments] = useState([]);
@@ -25,6 +25,7 @@ const TaskDetailDrawer = ({ projectId }) => {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(projectId || projectOptions[0]?.id || '');
   const [priority, setPriority] = useState('MEDIUM');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -43,9 +44,12 @@ const TaskDetailDrawer = ({ projectId }) => {
 
   useEffect(() => {
     if (isTaskDrawerOpen) {
-      // Fetch project members for assignment
-      if (projectId) {
-        loadProjectMembers();
+      // Load project members for assignment when drawer is open
+      const activeProjectId = selectedTask?.projectId || projectId || projectOptions[0]?.id;
+      setSelectedProjectId(activeProjectId || '');
+
+      if (activeProjectId) {
+        loadProjectMembers(activeProjectId);
       }
 
       if (selectedTask) {
@@ -85,7 +89,7 @@ const TaskDetailDrawer = ({ projectId }) => {
         setAlerts([]);
       }
     }
-  }, [selectedTask, isTaskDrawerOpen, projectId]);
+  }, [selectedTask, isTaskDrawerOpen, projectId, projectOptions]);
 
   const loadTaskDetails = async () => {
     if (!selectedTask) return;
@@ -113,12 +117,13 @@ const TaskDetailDrawer = ({ projectId }) => {
     }
   };
 
-  const loadProjectMembers = async () => {
-    if (!projectId) return;
+  const loadProjectMembers = async (projectIdToLoad) => {
+    const projectToLoad = projectIdToLoad || projectId;
+    if (!projectToLoad) return;
 
     setLoadingMembers(true);
     try {
-      const response = await projectService.getMembers(projectId);
+      const response = await projectService.getMembers(projectToLoad);
       const members = response.data?.members || [];
       setTeamMembers(members);
     } catch (error) {
@@ -152,7 +157,7 @@ const TaskDetailDrawer = ({ projectId }) => {
   const handleCreateTask = async (event) => {
     event.preventDefault();
 
-    if (!projectId) {
+    if (!selectedProjectId) {
       toast.error('Please select a project before creating a task.');
       return;
     }
@@ -170,7 +175,7 @@ const TaskDetailDrawer = ({ projectId }) => {
     setSaving(true);
     try {
       const taskData = {
-        projectId,
+        projectId: selectedProjectId,
         name: name.trim(),
         description: description.trim(),
         priority,
@@ -276,6 +281,28 @@ const TaskDetailDrawer = ({ projectId }) => {
         <h3 className="text-lg font-semibold text-gray-900 mb-4">📋 Basic Information</h3>
         
         <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Project *</label>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => {
+                setSelectedProjectId(e.target.value);
+                setSelectedAssignees([]);
+                loadProjectMembers(e.target.value);
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="">Select a project</option>
+              {projectOptions.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">Create this task for the selected project.</p>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Task Name *</label>
             <input
@@ -439,14 +466,34 @@ const TaskDetailDrawer = ({ projectId }) => {
 
       {/* TEAM ASSIGNMENT SECTION */}
       <div className="border-b pb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">👥 Assign to Team</h3>
-          {selectedAssignees.length > 0 && (
-            <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full">
-              {selectedAssignees.length} selected
-            </span>
-          )}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">👥 Assign to Person / Team</h3>
+            <p className="text-sm text-gray-500 mt-1">Select specific people or assign to the project team.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedAssignees(teamMembers.map(member => member.user?.id).filter(Boolean))}
+              disabled={teamMembers.length === 0}
+              className="px-3 py-2 bg-blue-50 text-blue-700 rounded-lg border border-blue-200 text-sm hover:bg-blue-100 transition-colors disabled:opacity-50"
+            >
+              Select All Team
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedAssignees([])}
+              className="px-3 py-2 bg-gray-50 text-gray-700 rounded-lg border border-gray-200 text-sm hover:bg-gray-100 transition-colors"
+            >
+              Clear Selection
+            </button>
+          </div>
         </div>
+        {selectedAssignees.length > 0 && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-blue-700 text-sm">
+            {selectedAssignees.length} team member{selectedAssignees.length !== 1 ? 's' : ''} selected for this task.
+          </div>
+        )}
 
         <div>
           {loadingMembers ? (
