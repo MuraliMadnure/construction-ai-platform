@@ -1,6 +1,7 @@
 const prisma = require('../utils/prisma');
 const logger = require('../utils/logger');
 const { cacheGet } = require('../utils/cache');
+const bcrypt = require('bcrypt');
 
 
 // Get all projects
@@ -465,13 +466,83 @@ exports.getProjectMembers = async (req, res, next) => {
 exports.addProjectMember = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { userId, role } = req.body;
+    const { email, firstName, lastName, phone, role } = req.body;
+    const normalizedProjectRole = {
+      ADMIN: 'admin',
+      MANAGER: 'project_manager',
+      MEMBER: 'member',
+      VIEWER: 'viewer'
+    }[role] || role || 'viewer';
 
-    // Check if member already exists
+    // Validate required fields
+    if (!email || !firstName || !lastName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, first name, and last name are required'
+      });
+    }
+
+    // Validate project exists before creating a user or membership
+    const project = await prisma.project.findUnique({
+      where: { id },
+      select: { id: true }
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+
+    // Check if user already exists
+    let user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() }
+    });
+
+    const wasCreated = !user;
+
+    // If user doesn't exist, create them
+    if (!user) {
+      // Generate a temporary password (user will need to reset it)
+      const tempPassword = Math.random().toString(36).slice(-12) + 'Temp123!';
+      const passwordHash = await bcrypt.hash(tempPassword, 12);
+
+      user = await prisma.user.create({
+        data: {
+          email: email.toLowerCase(),
+          firstName,
+          lastName,
+          phone,
+          passwordHash,
+          status: 'ACTIVE'
+        }
+      });
+
+      // Assign default role
+      const defaultRole = await prisma.role.findUnique({
+        where: { name: 'viewer' }
+      });
+
+      if (defaultRole) {
+        await prisma.userRole.create({
+          data: {
+            userId: user.id,
+            roleId: defaultRole.id
+          }
+        });
+      } else {
+        logger.warn(`Default viewer role not found while creating user ${user.email}`);
+      }
+
+      logger.info(`New user created and added to project ${id}: ${user.email}`);
+    }
+
+    // Check if member already exists in project
     const existing = await prisma.projectMember.findFirst({
       where: {
         projectId: id,
-        userId
+        userId: user.id
       }
     });
 
@@ -485,8 +556,8 @@ exports.addProjectMember = async (req, res, next) => {
     const member = await prisma.projectMember.create({
       data: {
         projectId: id,
-        userId,
-        role: role || 'member'
+        userId: user.id,
+        role: normalizedProjectRole
       },
       include: {
         user: {
@@ -495,17 +566,18 @@ exports.addProjectMember = async (req, res, next) => {
             firstName: true,
             lastName: true,
             email: true,
+            phone: true,
             avatarUrl: true
           }
         }
       }
     });
 
-    logger.info(`Member added to project ${id}: ${userId}`);
+    logger.info(`Member added to project ${id}: ${user.email} (${normalizedProjectRole})`);
 
     res.status(201).json({
       success: true,
-      message: 'Member added successfully',
+      message: wasCreated ? 'New team member created and added successfully' : 'Team member added successfully',
       data: { member }
     });
   } catch (error) {

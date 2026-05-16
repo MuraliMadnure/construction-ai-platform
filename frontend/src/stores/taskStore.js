@@ -179,10 +179,30 @@ const useTaskStore = create(
       fetchTasks: async (projectId) => {
         set({ loading: true, error: null });
         try {
-          const data = await taskService.getAll({ projectId });
-          set({ tasks: data.tasks || data, loading: false });
+          const response = await taskService.getAll({ projectId });
+          // Handle different response formats
+          let tasks = [];
+          if (response?.data?.data?.tasks) {
+            // Backend response format: { success: true, data: { tasks: [...] } }
+            tasks = response.data.data.tasks;
+          } else if (response?.data?.tasks) {
+            // Alternative format
+            tasks = response.data.tasks;
+          } else if (Array.isArray(response?.data)) {
+            // Direct array response
+            tasks = response.data;
+          } else if (Array.isArray(response)) {
+            // Direct array
+            tasks = response;
+          }
+          // Ensure tasks is always an array
+          if (!Array.isArray(tasks)) {
+            tasks = [];
+          }
+          set({ tasks, loading: false });
         } catch (error) {
-          set({ error: error.message, loading: false });
+          console.error('Error fetching tasks:', error);
+          set({ error: error.message, tasks: [], loading: false });
           throw error;
         }
       },

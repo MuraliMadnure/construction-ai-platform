@@ -1,4 +1,5 @@
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const prisma = require('../utils/prisma');
 const config = require('../config');
@@ -16,7 +17,10 @@ const generateTokens = (userId) => {
   const refreshToken = jwt.sign(
     { userId },
     config.jwt.refreshSecret,
-    { expiresIn: config.jwt.refreshExpiresIn }
+    {
+      expiresIn: config.jwt.refreshExpiresIn,
+      jwtid: crypto.randomUUID()
+    }
   );
 
   return { accessToken, refreshToken };
@@ -132,8 +136,8 @@ exports.login = async (req, res, next) => {
       }
     });
 
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = user;
+    // Remove password hash from response
+    const { passwordHash: _, ...userWithoutPassword } = user;
 
     logger.info(`User logged in: ${user.email}`);
 
@@ -286,7 +290,6 @@ exports.forgotPassword = async (req, res, next) => {
     }
 
     // Generate reset token using separate reset secret
-    const crypto = require('crypto');
     const resetId = crypto.randomBytes(16).toString('hex');
     const resetToken = jwt.sign(
       { userId: user.id, resetId },

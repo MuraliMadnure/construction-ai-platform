@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { RotateCcw, Save, Target, TrendingUp, X, UserPlus, Mail, Shield } from 'lucide-react';
+import { RotateCcw, Save, Target, TrendingUp, X, UserPlus, Mail, Shield, Phone, User } from 'lucide-react';
 import projectService from '../services/project.service';
 import taskService from '../services/task.service';
 
@@ -27,6 +27,9 @@ const ProjectDetailPage = () => {
   const [savingProgress, setSavingProgress] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [memberEmail, setMemberEmail] = useState('');
+  const [memberFirstName, setMemberFirstName] = useState('');
+  const [memberLastName, setMemberLastName] = useState('');
+  const [memberPhone, setMemberPhone] = useState('');
   const [memberRole, setMemberRole] = useState('VIEWER');
   const [addingMember, setAddingMember] = useState(false);
 
@@ -131,20 +134,26 @@ const ProjectDetailPage = () => {
   const handleAddMember = async (e) => {
     e.preventDefault();
 
-    if (!memberEmail.trim()) {
-      toast.error('Please enter an email address');
+    if (!memberEmail.trim() || !memberFirstName.trim() || !memberLastName.trim()) {
+      toast.error('Please fill in all required fields');
       return;
     }
 
     try {
       setAddingMember(true);
-      await projectService.addMember(id, {
+      const response = await projectService.addMember(id, {
         email: memberEmail.trim(),
+        firstName: memberFirstName.trim(),
+        lastName: memberLastName.trim(),
+        phone: memberPhone.trim(),
         role: memberRole
       });
-      toast.success('Team member added successfully');
+      toast.success(response.message || 'Team member added successfully');
       setShowAddMemberModal(false);
       setMemberEmail('');
+      setMemberFirstName('');
+      setMemberLastName('');
+      setMemberPhone('');
       setMemberRole('VIEWER');
       loadProjectData(); // Reload to show new member
     } catch (error) {
@@ -156,7 +165,7 @@ const ProjectDetailPage = () => {
   };
 
   const handleRemoveMember = async (memberId) => {
-    if (!confirm('Are you sure you want to remove this team member?')) {
+    if (!window.confirm('Are you sure you want to remove this team member?')) {
       return;
     }
 
@@ -669,7 +678,7 @@ const ProjectDetailPage = () => {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">Add Team Member</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Invite a member to this project</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Create a new team member and add them to this project</p>
                   </div>
                 </div>
                 <button
@@ -682,6 +691,45 @@ const ProjectDetailPage = () => {
 
               {/* Form */}
               <form onSubmit={handleAddMember} className="p-6 space-y-5">
+                {/* Name Fields */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* First Name */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      First Name *
+                    </label>
+                    <div className="relative">
+                      <User className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+                      <input
+                        type="text"
+                        required
+                        value={memberFirstName}
+                        onChange={(e) => setMemberFirstName(e.target.value)}
+                        placeholder="John"
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Last Name */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Last Name *
+                    </label>
+                    <div className="relative">
+                      <User className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+                      <input
+                        type="text"
+                        required
+                        value={memberLastName}
+                        onChange={(e) => setMemberLastName(e.target.value)}
+                        placeholder="Doe"
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Email Input */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -694,12 +742,32 @@ const ProjectDetailPage = () => {
                       required
                       value={memberEmail}
                       onChange={(e) => setMemberEmail(e.target.value)}
-                      placeholder="member@example.com"
+                      placeholder="john.doe@example.com"
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     />
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
-                    The user must have an account with this email
+                    A new account will be created for this email if it doesn't exist
+                  </p>
+                </div>
+
+                {/* Phone Input */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    Mobile Number
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+                    <input
+                      type="tel"
+                      value={memberPhone}
+                      onChange={(e) => setMemberPhone(e.target.value)}
+                      placeholder="+1 (555) 123-4567"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                    Optional contact number for the team member
                   </p>
                 </div>
 
@@ -774,7 +842,7 @@ const ProjectDetailPage = () => {
                   </button>
                   <button
                     type="submit"
-                    disabled={addingMember || !memberEmail.trim()}
+                    disabled={addingMember || !memberEmail.trim() || !memberFirstName.trim() || !memberLastName.trim()}
                     className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors inline-flex items-center justify-center gap-2"
                   >
                     {addingMember ? (
@@ -785,7 +853,7 @@ const ProjectDetailPage = () => {
                     ) : (
                       <>
                         <UserPlus className="w-4 h-4" />
-                        Add Member
+                        Create & Add Member
                       </>
                     )}
                   </button>

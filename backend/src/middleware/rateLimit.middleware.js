@@ -22,8 +22,8 @@ const apiLimiter = rateLimit({
  * Strict rate limiter for authentication endpoints
  */
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 requests per window
+  windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS, 10) || 20, // 20 requests per window (increased from 5)
   skipSuccessfulRequests: true,
   message: {
     success: false,
